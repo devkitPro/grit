@@ -1,0 +1,110 @@
+//
+// (win)git source code, v0.6
+// (20050313-20060820, cearn)
+
+// === TOC ===
+
+* Introduction / basic working
+* Change log
+* Future Work
+* On FreeImage
+* On LZ77
+
+// --- Introduction ---------------------------------------------------
+  What you have here is the source code to wingit, the Windows GBA
+Image Transmogrifier. Git is actually two applications: there's
+git and wingit, which are command-line and a windows tool,
+respectively.
+  Git uses 3 libraries: my own two cldib and libgit for basic
+bitmap routines and the exporter part, and FreeImage for the bitmap 
+file reading.
+  The original versions had some Windows/Intel-specific work in here, 
+but thanks to Wintermute that should be taken care of, and it should 
+compile under Windows, Linux and Mac OSX now. If there are any 
+problems, please let me know.
+
+The exporter works in stages, as it should. This may waste a lot of
+cycles, but also keeps it maintainable. The basic process is:
+- read image
+- read and validate all the options
+- Prepare a 'work' bitmap
+  - crop image to requested size
+  - resample bitdepth (16bpp for 16bpp bitmaps, 8bpp for everything
+    else)
+  - NEW,20060803: set transparent palette entry/color
+- for bitmaps:
+  - prepare bitmap (which is in fact already complete)
+- for tiles:
+  - re-arrange to screenblock
+  - re-arrange to meta-tiles
+  - re-arrange to tiles
+  - prepare map
+    - tile-reduce
+    - add tile offset
+    - meta-map
+    - resample to affine format (bytes)
+    - compress
+- prepare image
+  - resample bit-depth
+  - compress
+- write header file
+- prepare palette (go to 16bpp colors)
+- write data file(s) in C, GAS, binary or GBFS
+
+--- Future work ---
+- Fix Huffman better :P
+- batch-operations
+- merge palette with other files
+- merge tileset with other external file (oh yes plz!)
+- save tileset
+- documentation
+
+There are a few snippets of doxygen in cldib and libgit, but not 
+enough to cover everything. I'd like to do the other stuff at some 
+time, but I really don't think I can fiind the time and it's not that 
+high on my list of priorities.
+
+--- Change Log --------------------------------------------------------
+* v0.6.2, 20070119:
+  palette export bug fixed.
+  platform independence more complete.
+  added -gT! to always set opaque bit for nds images
+* v0.6, 20060803: platform independence *should* be complete, but I can't
+  test for it myself. If there are any undefined things, go to 
+  winglue.h and add something; if it's an endian problem 
+  (reversed bits/bytes), use BYTE_ORDER to switch between Big and Little 
+  systems. Oh, and notify me of course.
+* v0.6, 20060803: Added -pT and -gT flags for transparent palette entry
+  (is switched with pal[0]) and transparent 16bpp color, respectively.
+* v0.6, 20060803: Added -ff option, for getting the command line 
+  arguments from a file, which is easier on makefiles.
+
+--- On FreeImage ------------------------------------------------------
+The code only includes the required files to compile the thing on 
+windows. Linux and OSX users should build and install FreeImage from
+source before building git (http://freeimage.sourceforge.net). FreeImage
+is covered under the GPL license.
+
+--- On LZ77 compression and gbfs functionality ------------------------
+Both the LZ77 compressor and GBFS were taken from the website of
+Damian Yerrick's (www.pineight.com) and modified to suit my own need.
+Both are covered by GPL as well.
+
+--- CLI functions -----------------------------------------------------
+
+
+--- Misc --------------------------------------------------------------
+You know the drill:
+
+Use, distribute, and modify this code freely.
+
+"I do not accept responsibility for any effects, adverse or
+ otherwise, that this code may have on you, your computer, your
+ sanity, your dog, and anything else that you can think of. Use it
+ at your own risk."
+
+Have fun with the code, and don't laugh too loudly please.
+- cearn
+
+
+
