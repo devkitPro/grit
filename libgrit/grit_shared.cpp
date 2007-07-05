@@ -51,7 +51,7 @@ void grs_clear(GRIT_SHARED *grs)
 	dib_free(grs->dib);
 	free(grs->pal_rec.data);
 	
-	memset(&grs, 0, sizeof(GRIT_SHARED));
+	memset(grs, 0, sizeof(GRIT_SHARED));
 }
 
 
