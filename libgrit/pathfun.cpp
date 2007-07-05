@@ -242,8 +242,11 @@ char *path_repl_ext(char *dst, const char *path, const char *ext, int size)
 	{
 		if(pext)
 			strcpy(pext, ext);			
-		else
-			strcat(str, ext);
+	    else
+	    {
+	        strcat(str, ".");
+	        strcat(str, ext);
+	    }
 	}
 	else				// Remove
 	{
