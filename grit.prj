@@ -10,9 +10,68 @@ Project Tagfile=
 Create Tagfile=0
 Include Sub Directories=0
 [Group]
-0=
+0=cldib
+1=libgrit
+2=srcgrit
+3=
 [Open Files]
-Open File0=Active File Display Mode=-1
+Open File0=D:\projects\devkitPro\buildscripts\tools\gba\grit\Makefile
+Active File Display Mode=3
+Open File Pos0=0
+Open File Line0=1250
+Open File Window Pos0=2,3,-1,-1,-4,-23,0,0,970,330
+Open File1=
+Open File Pos1=0
+Open File Line1=127
+Open File Window Pos1=0,1,-1,-1,-4,-23,44,44,1018,378
+Open File2=D:\projects\devkitPro\buildscripts\tools\gba\grit\Makefile
+Open File Pos2=161
+Open File Line2=0
+Open File Window Pos2=0,1,-1,-1,-4,-23,66,66,1040,400
+Open File3=
+Active File Index=0
 [File View]
-Current Select=Project Files
+Current Select=Project Files\Makefile
 Scroll Position=0
+[Files - cldib]
+0=cldib\cldib.h
+1=cldib\cldib_adjust.cpp
+2=cldib\cldib_bmp.cpp
+3=cldib\cldib_conv.cpp
+4=cldib\cldib_core.cpp
+5=cldib\cldib_core.h
+6=cldib\cldib_files.h
+7=cldib\cldib_quant.h
+8=cldib\cldib_tmap.cpp
+9=cldib\cldib_tmap.h
+10=cldib\cldib_tools.cpp
+11=cldib\cldib_tools.h
+12=cldib\cldib_wu.cpp
+13=cldib\winglue.h
+[Files]
+0=grit-readme.txt
+1=grit-src.txt
+2=licence-mit.txt
+3=license-fi.txt
+4=license-gpl.txt
+5=Makefile
+[Files - libgrit]
+0=libgrit\grit.h
+1=libgrit\grit_core.cpp
+2=libgrit\grit_huff.cpp
+3=libgrit\grit_lz.cpp
+4=libgrit\grit_misc.cpp
+5=libgrit\grit_prep.cpp
+6=libgrit\grit_rle.cpp
+7=libgrit\grit_shared.cpp
+8=libgrit\grit_xp.cpp
+9=libgrit\libgrit.dox
+10=libgrit\libgrit.dsp
+11=libgrit\logger.cpp
+12=libgrit\logger.h
+13=libgrit\pathfun.cpp
+14=libgrit\pathfun.h
+[Files - srcgrit]
+0=srcgrit\cli.cpp
+1=srcgrit\cli.h
+2=srcgrit\grit_main.cpp

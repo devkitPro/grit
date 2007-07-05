@@ -4,7 +4,6 @@ GRIT_BUILD	:=	20070331
 CPPFLAGS	:=	-DGRIT_VERSION=\"$(GRIT_VERSION)\" -DGRIT_BUILD=\"$(GRIT_BUILD)\" -O3 -Icldib -Ilibgit
 LDFLAGS		:=	
 
-
 # ---------------------------------------------------------------------
 # Platform specific stuff
 # ---------------------------------------------------------------------
@@ -29,10 +28,12 @@ endif
 
 ifneq (,$(findstring Darwin,$(UNAME)))
 	OS := OSX
+else
+	LDFLAGS += -s
 endif
 
 ifneq (,$(findstring Linux,$(UNAME)))
-	LDFLAGS += -s -static
+	LDFLAGS += -static
 	OS := Linux
 endif
 
