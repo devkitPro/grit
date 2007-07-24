@@ -22,7 +22,6 @@
 #include <strings.h>
 #endif	// _MSC_VER
 
-#include <direct.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
