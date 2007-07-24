@@ -1,8 +1,8 @@
 GRIT_VERSION	:=	0.7.2
 GRIT_BUILD	:=	20070331
 
-CPPFLAGS	:=	-DGRIT_VERSION=\"$(GRIT_VERSION)\" -DGRIT_BUILD=\"$(GRIT_BUILD)\" -O3 -Icldib -Ilibgit
-LDFLAGS		:=	
+CPPFLAGS	:=	-g -DGRIT_VERSION=\"$(GRIT_VERSION)\" -DGRIT_BUILD=\"$(GRIT_BUILD)\" -O3 -Icldib -Ilibgit
+LDFLAGS		:=	-g
 
 # ---------------------------------------------------------------------
 # Platform specific stuff
@@ -117,7 +117,7 @@ $(LIBGRIT)	:	$(LIBCLDIB) $(LIBGRIT_OBJ)
 
 $(TARGET)	:	$(LIBGRIT) $(GRIT_OBJ)
 	$(CXX) $(LDFLAGS) -o $@ $(GRIT_OBJ) $(LIBPATHS) -lgrit -lcldib -lfreeimage
-	-upx $@
+
 
 build:
 	@[ -d $@ ] || mkdir -p $@
