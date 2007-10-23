@@ -129,10 +129,10 @@ install:
 	cp  $(TARGET) $(EXTRAINSTALL) $(PREFIX)
 
 dist-src:
-	@tar --exclude=*CVS* -cvjf git-src-$(GRIT_VERSION).tar.bz2 $(SRCDIRS) *.txt Makefile 
+	@tar --exclude=*CVS* -cvjf grit-src-$(GRIT_VERSION).tar.bz2 $(SRCDIRS) *.txt Makefile 
 
 dist-bin: all
-	@tar -cjvf git-$(VERSION)-$(OS).tar.bz2 $(TARGET) $(EXTRATAR)
+	@tar -cjvf grit-$(VERSION)-$(OS).tar.bz2 $(TARGET) $(EXTRATAR)
 
 dist: dist-src dist-bin
 
