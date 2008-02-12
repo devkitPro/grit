@@ -632,13 +632,13 @@ void gather_opts(strvec *av, int argc, char **argv)
 	path_repl_ext(str, argv[1], "grit", MAXPATHLEN);
 
 	// if flag file, load args from file
-	pstr= cli_str("-ff", argc, argv, str);
+	pstr = cli_str("-ff", argc, argv, str);
 
 	// Attempt to open
 	FILE *fp= fopen(pstr, "r"); 
 	if(fp == NULL)
 	{
-		pstr= path_repl_ext(str, str, "git", MAXPATHLEN);
+		pstr= path_repl_ext(str, str, "grit", MAXPATHLEN);
 		fp= fopen(pstr, "r");
 		if(fp == NULL)
 			return;
