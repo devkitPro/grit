@@ -89,9 +89,9 @@ DEPENDS		:=	$(GRIT_OBJ:.o=.d) $(LIBCLDIB_OBJ:.o=.d) $(LIBGRIT_OBJ:.o=.d)
 
 # ---------------------------------------------------------------------
 
-SRCDIRS	:= $(CLDIB_DIR) $(LIBGRIT_DIR) $(EXTLIB_DIR) $(GRIT_DIR)
+SRCDIRS	:= $(CLDIB_DIR) $(LIBGRIT_DIR) $(GRIT_DIR) $(EXTLIB_DIR)
 INCDIRS	:= $(CLDIB_DIR) $(LIBGRIT_DIR) $(EXTLIB_DIR)
-LIBDIRS	:= . $(EXTLIB_DIR)
+LIBDIRS	:= .
 
 INCLUDE		:= $(foreach dir, $(INCDIRS), -I$(dir))
 LIBPATHS	:= $(foreach dir, $(LIBDIRS), -L$(dir))
