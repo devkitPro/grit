@@ -15,8 +15,8 @@ Include Sub Directories=0
 2=srcgrit
 3=
 [Open Files]
-Open File0=D:\projects\devkitPro\buildscripts\tools\gba\grit\srcgrit\cli.cpp
-Active File Display Mode=3
+Open File0=
+Active File Display Mode=-1
 Open File Pos0=9
 Open File Line0=0
 Open File Window Pos0=0,1,-1,-1,-4,-30,66,87,1096,414
@@ -39,7 +39,7 @@ Open File Line4=3161
 Open File Window Pos4=2,3,-1,-1,-4,-30,22,29,1056,360
 Open File5=
 [File View]
-Current Select=Project Files\libgrit\libgrit\pathfun.cpp
+Current Select=Project Files\Makefile
 Scroll Position=0
 [Files - cldib]
 0=cldib\cldib.h
