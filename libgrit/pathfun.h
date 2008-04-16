@@ -3,7 +3,9 @@
 //   pathfun header file
 // (20050903 - 20061121, cearn)
 //
-// === NOTES === 
+/* === NOTES === 
+  * 20080211, jv: TODO: split this into path-only and data-only files.
+*/
 
 #ifndef __PATHFUN_H__
 #define __PATHFUN_H__
@@ -93,6 +95,9 @@ long file_size(const char *fpath);
 long file_copy(FILE *fout, FILE *fin, long size);
 long file_find_tag(FILE *fout, FILE *fin, const char *tag);
 
+void file_write_cmt(FILE *fp, const char *cmt, const char *text);
+
+
 /*!	\}	*/
 
 
@@ -103,13 +108,11 @@ long file_find_tag(FILE *fout, FILE *fin, const char *tag);
 
 bool xp_array_c(FILE *fp, const char *symname, 
 	const void *data, int len, int chunk);
-bool xp_data_c(FILE *fp, 
-	const void *data, int len, int chunk);
+bool xp_data_c(FILE *fp, const void *data, int len, int chunk);
 
 bool xp_array_gas(FILE *fp, const char *symname, 
 	const void *data, int len, int chunk);
-bool xp_data_gas(FILE *fp, 
-	const void *data, int len, int chunk);
+bool xp_data_gas(FILE *fp, const void *data, int len, int chunk);
 
 bool xp_data_bin(const char *fname, 
 	const void *data, int len, const char *fmode);
@@ -131,7 +134,8 @@ bool xp_data_bin(const char *fname,
 
 //! Check if string \a str is empty
 inline int isempty(const char *str)
-{	return (str==NULL || str[0]=='\0');	}
+{	return (str==NULL || str[0]=='\0');						}
+
 
 #endif // __PATHFUN_H__
 

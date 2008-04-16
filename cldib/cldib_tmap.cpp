@@ -265,7 +265,7 @@ CLDIB *tmap_render(TTileMap *tmap, const RECT *rect)
 				dib_vflip(tmpDib);
 
 			if(tileB == 8 && (tmap->flags & TMAP_PALSWAP))
-				dib_set_pbank(tmpDib, BF_GET(me.attr, ME_PBANK));
+				dib_set_pbank(tmpDib, me.pal);
 
 			// Render temp dib
 			BYTE *dibD= dib_get_img_at(dib, tx*tileW, ty*tileH);
@@ -389,7 +389,7 @@ TMapEntry dib_find(CLDIB *dib, CLDIB *tileset, int tileN, DWORD flags)
 	if( dibB == 8 && (flags &TMAP_PALSWAP) )
 	{
 		mask= 0x0F;
-		BF_SET(me.attr, dib_get_pbank(dib), ME_PBANK);
+		me.pal= dib_get_pbank(dib);
 	}
 	else
 		mask= 0xFFFFFFFF;

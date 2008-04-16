@@ -1,10 +1,11 @@
 //
 //! \file cldib_tools.cpp
 //!   cldib_tools implementation file
-//! \date 20050823 - 20051228
+//! \date 20050823 - 20080204
 //! \author cearn
 //
-// === NOTES ===
+/* === NOTES ===
+*/
 
 #include "cldib_core.h"
 #include "cldib_tools.h"
@@ -214,11 +215,13 @@ BOOL data_redim(const RECORD *src, RECORD *dst, int tileH, int tileN)
 
 
 //! Reduce the number of colors of dib and/or merge with an external palette.
-/*!	\param dib	DIB to reduce the palette of. Must be paletted.
-*	\param extPal	External palette record. \a dib will use this 
-*	  and its own palette. Can be NULL. The new reduced palette goes here too.
-*	\return	Number of reduced colors, or 0 if not 8bpp or if the reduced
-*	  palette would exceed 256 entries.
+/*!	\param dib	DIB to reduce the palette of. Must be paletted. Pixels 
+		will be rearranged to match the palette.
+	\param extPal	External palette record. \a dib will use this 
+		and its own palette. Can be NULL. The new reduced palette goes here too.
+	\return	Number of reduced colors, or 0 if not 8bpp. 
+	\note	The order of colors is the order of appearance, except for the 
+		first one.
 */
 int dib_pal_reduce(CLDIB *dib, RECORD *extPal)
 {
@@ -247,64 +250,66 @@ int dib_pal_reduce(CLDIB *dib, RECORD *extPal)
 	// NOTE: the *Clr things are just to make comparisons easier.
 	//		 pointers ftw!
 
-	int nn=0;
+	int count;
 	RGBQUAD *rdxPal= (RGBQUAD*)malloc(512*RGB_SIZE);
 	COLORREF *rdxClr= (COLORREF*)rdxPal, *dibClr= (COLORREF*)dib_get_pal(dib);
 
 	memset(rdxPal, 0, 512*RGB_SIZE);
-	if(extPal && extPal->data)
+	if(extPal != NULL && extPal->data != NULL)
 	{
 		memcpy(rdxPal, extPal->data, rec_size(extPal));
-		nn= extPal->height;
+		count= extPal->height;
+	}
+	else
+	{
+		rdxClr[0]= dibClr[0];
+		count= 1;
 	}
 
 	// PONDER: always keep index 0 ?
 
 	// Create reduced palette and prep tables for pixel conversion.
-	DWORD srcI[PAL_MAX], dstI[PAL_MAX];
+	DWORD srcIdx[PAL_MAX], dstIdx[PAL_MAX];
 
 	kk=0;
 	for(ii=0; ii<PAL_MAX; ii++)
 	{
 		if(histo[ii])
 		{
-			for(jj=0; jj<nn; jj++)
+			for(jj=0; jj<count; jj++)
 				if(rdxClr[jj] == dibClr[ii])
 					break;
 			// Match: add color to table
-			if(jj == nn)
+			if(jj == count)
 			{
 				rdxClr[jj]= dibClr[ii];
-				nn++;
+				count++;
 			}
-			srcI[kk]= jj;
-			dstI[kk]= ii;
+			srcIdx[kk]= jj;
+			dstIdx[kk]= ii;
 			kk++;
 		}
 	}
 
 	// PONDER: what *should* happen if nn > PAL_MAX ?
 	// Fail, trunc or re-quantize?
-	// Currently just fail.
-	if(nn > PAL_MAX)
-		return 0;
 
 	//  Update palette and remap pixels
 	memcpy(dibClr, rdxClr, PAL_MAX*RGB_SIZE);
-	dib_pixel_replace(dib, dstI, srcI, kk);
+	dib_pixel_replace(dib, dstIdx, srcIdx, kk);
 
 	// Update rdxPal's data
 	if(extPal)
 	{
 		extPal->width= RGB_SIZE;
-		extPal->height= nn;
+		extPal->height= count;
 		free(extPal->data);
 
-		extPal->data= (BYTE*)malloc(nn*RGB_SIZE);
-		memcpy(extPal->data, rdxClr, nn*RGB_SIZE);
+		extPal->data= (BYTE*)malloc(count*RGB_SIZE);
+		memcpy(extPal->data, rdxClr, count*RGB_SIZE);
 	}
 
-	return nn;
+	return count;
 }
 
 

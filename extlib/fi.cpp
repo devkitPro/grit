@@ -227,7 +227,6 @@ CLDIB *fi2dib(FIBITMAP *fi)
 	if(nclrs > 0)
 		memcpy(dib_get_pal(dib), FreeImage_GetPalette(fi), nclrs*RGB_SIZE);
 
-	RGBQUAD *rgb= FreeImage_GetPalette(fi);
 	// flip for top down
 	dib_vflip(dib);
 

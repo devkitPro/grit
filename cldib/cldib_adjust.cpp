@@ -1,7 +1,7 @@
 //
 //! \file cldib_adjust.cpp
 //!   color adjustment
-//! \date 20050823 - 20050823
+//! \date 20050823 - 20080304
 //! \author cearn
 //
 // === NOTES === 
@@ -334,5 +334,61 @@ BOOL dib_pixel_replace(CLDIB *dib, DWORD dst[], DWORD src[], int nn)
 	}
 	return TRUE;
 }
+
+
+//! Swap red and blue components.
+/*!	\note	In-place swap.
+*/
+CLDIB *dib_swap_rgb(CLDIB *dib)
+{
+	if(dib == NULL)
+		return NULL;
+
+	int ii, ix, iy;
+	int dibW, dibH, dibB, dibP;
+	dib_get_attr(dib, &dibW, &dibH, &dibB, &dibP);
+
+	switch(dibB)
+	{
+	case 16:
+		{
+			WORD *dibL= (WORD*)dib_get_img(dib);
+			for(ii=0; ii<dibP*dibH/2; ii++)
+				dibL[ii]= swap_rgb16(dibL[ii]);			
+		}
+		break;
+
+	case 24:
+		{
+			BYTE *dibD= dib_get_img(dib);
+			RGBTRIPLE *dibL;
+			for(iy=0; iy<dibH; iy++)
+			{
+				dibL= (RGBTRIPLE*)&dibD[iy*dibP];
+				for(ix=0; ix<dibW; ix++)
+					dibL[ix]= swap_rgb24(dibL[ix]);					
+			}
+		}
+		break;
+
+	case 32:
+		{
+			RGBQUAD *dibL= (RGBQUAD*)dib_get_img(dib);
+			for(ii=0; ii<dibP*dibH/4; ii++)
+				dibL[ii]= swap_rgb32(dibL[ii]);			
+		}
+		break;
+	
+	default:	// paletted
+		{
+			RGBQUAD *dibL= (RGBQUAD*)dib_get_pal(dib);
+			for(ii=0; ii<dib_get_nclrs(dib); ii++)
+				dibL[ii]= swap_rgb32(dibL[ii]);	
+		}
+	}
+
+	return dib;
+}
+
 
 // EOF

@@ -1,17 +1,19 @@
 //
 //! \file grit_prep.cpp
 //!   Data preparation routines
-//! \date 20050814 - 20070226
+//! \date 20050814 - 20080211
 //! \author cearn
-//
-// === NOTES === 
-// * 20061209,CLD: Fixed NDS alpha stuff. 
-// * 20060727,CLD: TODO: alpha clr(id) corrections
-// * 20060727,CLD: use RGB16 for pal conversion
-// * 20060727,CLD: endian stuff for prep_map, prep_img, prep_pal
-// * PONDER: external tile dib for grit_prep_map
-// * PONDER: tile sort for grit_prep_map
-// * PONDER: all records for grit_tile_reduce?
+/* === NOTES === 
+  * 20080215,jv: made tile-size variable. Only works for -gb though.
+  * 20080211,jv: pal-size not forced to 4x anymore (as it should be).
+  * 20080111,jv. Name changes, part 1
+  * 20061209,jv: Fixed NDS alpha stuff. 
+  * 20060727,jv: TODO: alpha clr(id) corrections
+  * 20060727,jv: use RGB16 for pal conversion
+  * 20060727,jv: endian stuff for prep_map, prep_gfx, prep_pal
+  * PONDER: tile sort for grit_prep_map
+  * PONDER: all records for grit_tile_reduce?
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,15 +28,15 @@
 // --------------------------------------------------------------------
 
 
-BOOL grit_prep_work_dib(GRIT_REC *gr);
-BOOL grit_prep_tiles(GRIT_REC *gr);
+bool grit_prep_work_dib(GritRec *gr);
+bool grit_prep_tiles(GritRec *gr);
 
-BOOL grit_prep_map(GRIT_REC *gr);
-BOOL grit_prep_img(GRIT_REC *gr);
-BOOL grit_prep_pal(GRIT_REC *gr);
+bool grit_prep_gfx(GritRec *gr);
+bool grit_prep_map(GritRec *gr);
+bool grit_prep_pal(GritRec *gr);
 
 u16 grit_find_tile_pal(BYTE *tileD);
-BOOL grit_tile_cmp(BYTE *test, BYTE *base, u32 x_xor, u32 y_xor, BYTE mask);
+bool grit_tile_cmp(BYTE *test, BYTE *base, u32 x_xor, u32 y_xor, BYTE mask);
 CLDIB *grit_tile_reduce(RECORD *dst, CLDIB *srcDib, u32 flags, CLDIB *extDib);
 RECORD *grit_meta_reduce(RECORD *dst, const RECORD *src, int metaN, u32 flags);
 
@@ -48,45 +50,46 @@ RECORD *grit_meta_reduce(RECORD *dst, const RECORD *src, int metaN, u32 flags);
 /*!	Converts and prepares the bitmap for export. 
 	
 */
-BOOL grit_prep(GRIT_REC *gr)
+bool grit_prep(GritRec *gr)
 {
 	// TODO: clear internals
 	lprintf(LOG_STATUS, "Preparing data.\n");
 
-	if(grit_prep_work_dib(gr) == FALSE)
+	if(grit_prep_work_dib(gr) == false)
 	{
 		lprintf(LOG_ERROR, "  No work DIB D: .\n");
-		return FALSE;
+		return false;
 	}
 
 	// NOTE: don't check for -g! just yet: -g! + -m is possible too
 	// if tiles: prep tiles & map
-	if(~gr->img_flags & GRIT_IMG_BMP)
+	grit_prep_tiles(gr);
+
+	if(gr->gfxMode == GRIT_GFX_TILE)
 	{
-		grit_prep_tiles(gr);
-		if(gr->map_flags & GRIT_INCL)
+		if(gr->mapProcMode != GRIT_EXCLUDE)
 			grit_prep_map(gr);
 	}
 
-	if(gr->img_flags & GRIT_INCL)
-		grit_prep_img(gr);
+	if(gr->gfxProcMode != GRIT_EXCLUDE)
+		grit_prep_gfx(gr);
 	
-	if(gr->pal_flags & GRIT_INCL)
+	if(gr->palProcMode != GRIT_EXCLUDE)
 		grit_prep_pal(gr);
 
 
 	lprintf(LOG_STATUS, "Data preparation complete.\n");		
-	return TRUE;
+	return true;
 }
 
 //! Sets up work bitmap of desired size and 8 or 16 bpp.
 /*!	This basically does two things. First, create a bitmap from the 
 	designated area of the source bitmap. Then, converts it 8 or 
-	16 bpp, depending on \a gr.img_bpp. Conversion to lower bpp is 
+	16 bpp, depending on \a gr.gfxBpp. Conversion to lower bpp is 
 	done later, when it's more convenient. The resultant bitmap is 
 	put into \a gr._dib, and will be used in later preparation.
 */
-BOOL grit_prep_work_dib(GRIT_REC *gr)
+bool grit_prep_work_dib(GritRec *gr)
 {
 	int ii, nn;
 	RGBQUAD *rgb;
@@ -94,13 +97,13 @@ BOOL grit_prep_work_dib(GRIT_REC *gr)
 	lprintf(LOG_STATUS, "Work-DIB creation.\n");		
 
 	// --- resize ---
-	CLDIB *dib= dib_copy(gr->src_dib, 
-		gr->area_left, gr->area_top, gr->area_right, gr->area_bottom, 
-		FALSE);
+	CLDIB *dib= dib_copy(gr->srcDib, 
+		gr->areaLeft, gr->areaTop, gr->areaRight, gr->areaBottom, 
+		false);
 	if(dib == NULL)
 	{
 		lprintf(LOG_ERROR, "  Work-DIB creation failed.\n");		
-		return FALSE;
+		return false;
 	}
 	// ... that's it? Yeah, looks like.
 
@@ -109,27 +112,27 @@ BOOL grit_prep_work_dib(GRIT_REC *gr)
 	int dibB= dib_get_bpp(dib);
 
 	// Convert to 16bpp, but ONLY for bitmaps
-	if( gr->img_bpp == 16 && GRIT_IS_BMP(gr) )
+	if( gr->gfxBpp == 16 && gr->gfxMode != GRIT_GFX_TILE )
 	{
 		if(dibB != 16)
 		{
-			lprintf(LOG_WARNING, 
-"  converting from %d bpp to %d bpp.\n", dibB, gr->img_bpp);
+			lprintf(LOG_WARNING, "  converting from %d bpp to %d bpp.\n", 
+				dibB, gr->gfxBpp);
 			CLDIB *dib2= dib_convert(dib, 16, 0);
 
 			// If paletted src AND -pT AND NOT -gT[!]
 			//   use trans color pal[T]
-			if( dibB <=8 && (gr->pal_flags & GRIT_PAL_TRANS) 
-				&& ( gr->img_flags & (GRIT_IMG_TRANS|GRIT_IMG_BMP_A) )==0 )
+			//# PONDER: did I fix this right?
+			if(dibB <= 8 && gr->palHasAlpha && !gr->gfxHasAlpha) 
 			{
-				rgb= &dib_get_pal(dib)[gr->pal_trans];
+				rgb= &dib_get_pal(dib)[gr->palAlphaId];
 				lprintf(LOG_WARNING, 
-"  pal->true-color conversion with transp pal-id option.\n"
-"    using color %02X%02X%02X", 
-					rgb->rgbRed, rgb->rgbGreen, rgb->rgbBlue);
+					"  pal->true-color conversion with transp pal-id option.\n"
+					"    using color %02X%02X%02X", 
+						rgb->rgbRed, rgb->rgbGreen, rgb->rgbBlue);
 				
-				gr->img_flags |= GRIT_IMG_TRANS;
-				gr->img_trans= *rgb;
+				gr->gfxHasAlpha= true;
+				gr->gfxAlphaColor= *rgb;
 			}
 
 			dib_free(dib);
@@ -137,7 +140,7 @@ BOOL grit_prep_work_dib(GRIT_REC *gr)
 			if(dib2 == NULL)
 			{
 				lprintf(LOG_ERROR, "prep: Bpp conversion failed.\n");	
-				return FALSE;
+				return false;
 			}
 			dib= dib2;
 		}
@@ -155,13 +158,14 @@ BOOL grit_prep_work_dib(GRIT_REC *gr)
 		WORD *dibD2= (WORD*)dib_get_img(dib);
 
 		// Single transparent color
-		if(gr->img_flags & GRIT_IMG_TRANS)
+		if(gr->gfxHasAlpha)
 		{
-			rgb= &gr->img_trans;
+			rgb= &gr->gfxAlphaColor;
 			WORD clr= RGB16(rgb->rgbBlue, rgb->rgbGreen, rgb->rgbRed), wd;
 
 			lprintf(LOG_STATUS, 
-"  converting to: 16bpp BGR, alpha=1, except for 0x%04X.\n", clr);
+				"  converting to: 16bpp BGR, alpha=1, except for 0x%04X.\n", 
+				clr);
 
 			for(ii=0; ii<nn; ii++)
 			{
@@ -169,7 +173,7 @@ BOOL grit_prep_work_dib(GRIT_REC *gr)
 				dibD2[ii]= (wd == clr ? wd : wd | NDS_ALPHA);	
 			}	
 		}
-		else if(gr->img_flags & GRIT_IMG_BMP_A)
+		else if(gr->gfxMode == GRIT_GFX_BMP_A)
 		{
 			lprintf(LOG_STATUS, "converting to: 16bpp BGR, alpha=1.\n");
 
@@ -186,8 +190,8 @@ BOOL grit_prep_work_dib(GRIT_REC *gr)
 	}
 	else if(dibB != 8)	// otherwise, convert to 8bpp
 	{
-		lprintf(LOG_WARNING, 
-"  converting from %d bpp to %d bpp.\n", dibB, gr->img_bpp);
+		lprintf(LOG_WARNING, "  converting from %d bpp to %d bpp.\n", 
+			dibB, gr->gfxBpp);
 		
 		CLDIB *dib2= dib_convert(dib, 8, 0);
 
@@ -195,25 +199,24 @@ BOOL grit_prep_work_dib(GRIT_REC *gr)
 		if(dib2 == NULL)
 		{
 			lprintf(LOG_ERROR, "  Bpp conversion failed.\n");	
-			return FALSE;
+			return false;
 		}
 		dib= dib2;
 	}
 
-	// palette transparency additions
+	// Palette transparency additions.
 	if(dib_get_bpp(dib)==8)
 	{
-		// If img-trans && !pal-trans:
-		//   Find img-trans in palette and use that
-		if( (gr->img_flags & GRIT_IMG_TRANS) && 
-			(~gr->pal_flags & GRIT_PAL_TRANS) )
+		// If gfx-trans && !pal-trans:
+		//   Find gfx-trans in palette and use that
+		if(gr->gfxHasAlpha && !gr->palHasAlpha)
 		{
-			rgb= &gr->img_trans;
+			rgb= &gr->gfxAlphaColor;
 			RGBQUAD *pal= dib_get_pal(dib);
 
 			lprintf(LOG_WARNING, 
-"  tru/pal -> pal conversion with transp color option.\n"
-"    looking for color %02X%02X%02X in palette.\n", 
+				"  tru/pal -> pal conversion with transp color option.\n"
+				"    looking for color %02X%02X%02X in palette.\n", 
 				rgb->rgbRed, rgb->rgbGreen, rgb->rgbBlue);
 			
 			UINT ii_min= 0, dist, dist_min;
@@ -232,28 +235,37 @@ BOOL grit_prep_work_dib(GRIT_REC *gr)
 			// HACK: count 'match' only if average error is < +/-14
 			if(dist_min < 576)
 			{
-				gr->pal_flags |= GRIT_PAL_TRANS;
-				gr->pal_trans= ii_min;
+				gr->palHasAlpha= true;
+				gr->palAlphaId= ii_min;
 			}
 		}
 
 		// Swap alpha and pixels palette entry
-		if(gr->pal_flags&GRIT_PAL_TRANS)
+		if(gr->palHasAlpha)
 		{
-			lprintf(LOG_STATUS, 
-"  palette transparency: pal[%d].\n", gr->pal_trans);
+			lprintf(LOG_STATUS, "  Palette transparency: pal[%d].\n", 
+				gr->palAlphaId);
 			BYTE *imgD= dib_get_img(dib);
 			nn= dib_get_size_img(dib);
 
 			for(ii=0; ii<nn; ii++)
 			{
 				if(imgD[ii] == 0)
-					imgD[ii]= gr->pal_trans;
-				else if(imgD[ii] == gr->pal_trans)
+					imgD[ii]= gr->palAlphaId;
+				else if(imgD[ii] == gr->palAlphaId)
 					imgD[ii]= 0;
 			}
 			RGBQUAD tmp, *pal= dib_get_pal(dib);
-			SWAP3(pal[0], pal[gr->pal_trans], tmp);
+			SWAP3(pal[0], pal[gr->palAlphaId], tmp);
+		}
+
+		//# TODO: Palette merging.
+		if(gr->palIsShared)
+		{
+			lprintf(LOG_STATUS, "  Palette merging\n");
+			nn= dib_pal_reduce(dib, &gr->shared->palRec);
+			if(nn>PAL_MAX)
+				lprintf(LOG_WARNING, "    New palette exceeds 256. Truncating.\n");
 		}
 	}
 
@@ -263,7 +275,7 @@ BOOL grit_prep_work_dib(GRIT_REC *gr)
 	lprintf(LOG_STATUS, "Work-DIB creation complete: %dx%d@%d.\n", 
 		dib_get_width(gr->_dib), dib_get_height(gr->_dib), 
 		dib_get_bpp(gr->_dib));		
-	return TRUE;
+	return true;
 }
 
 //! Rearranges the work dib into a strip of 8x8 tiles.
@@ -271,98 +283,109 @@ BOOL grit_prep_work_dib(GRIT_REC *gr)
 	stages. First, Rearrange into screen-blocks (option -mLr); then 
 	into metatiles (-M[w h]), then base-tiles.
 */
-BOOL grit_prep_tiles(GRIT_REC *gr)
+bool grit_prep_tiles(GritRec *gr)
 {
-	lprintf(LOG_STATUS, "Tile preparation.\n");		
+	lprintf(LOG_STATUS, "Tile preparation.\n");
 
 	CLDIB *dib= NULL;
 
-	// sbb redim
-	if(gr->map_flags & GRIT_MAP_REG)
+	// Sbb redim
+	if(gr->mapProcMode==GRIT_EXPORT && gr->mapLayout == GRIT_MAP_REG)
 	{
 		lprintf(LOG_STATUS, "  tiling to 256x256 tiles.\n");
 		dib= dib_redim(gr->_dib, 256, 256, 0);
 		if(dib == NULL)
 		{
-			lprintf(LOG_ERROR, "  SBB tiling failed.\n");		
-			return FALSE;
+			lprintf(LOG_ERROR, "  SBB tiling failed.\n");
+			return false;
 		}
 		dib_free(gr->_dib);
 		gr->_dib= dib;
 	}
 
-	// meta redim
-	int mw= gr->meta_width, mh= gr->meta_height;
-	if(mw*mh>1)
+	int tileW= gr->tileWidth, tileH= gr->tileHeight;
+	int metaW= gr->metaWidth, metaH= gr->metaHeight;
+	int frameW= tileW*metaW, frameH= tileH*metaH;
+
+	// Meta redim
+	if(grit_is_metatiled(gr))
 	{
-		lprintf(LOG_STATUS, "  tiling to %dx%d tiles.\n", mw*8, mh*8);
-		dib= dib_redim(gr->_dib, mw*8, mh*8, 0);
+		lprintf(LOG_STATUS, "  tiling to %dx%d tiles.\n", frameW, frameH);
+		dib= dib_redim(gr->_dib, frameW, frameH, 0);
 		if(dib == NULL)
 		{
-			lprintf(LOG_ERROR, "  meta tiling failed.\n");		
-			return FALSE;
+			lprintf(LOG_ERROR, "  meta-tiling failed.\n");
+			return false;
 		}
 		dib_free(gr->_dib);
 		gr->_dib= dib;
 	}
 
-	// tile redim
-	lprintf(LOG_STATUS, "  tiling to 8x8 tiles.\n");
-
-	dib= dib_redim(gr->_dib, 8, 8, 0);
-	if(dib == NULL)
+	// Tile redim
+	if(tileW*tileH > 1)
 	{
-		lprintf(LOG_ERROR, "  8x8 tiling failed.\n");		
-		return FALSE;
+		lprintf(LOG_STATUS, "  tiling to %dx%d tiles.\n", tileW, tileH);
+
+		dib= dib_redim(gr->_dib, tileW, tileH, 0);
+		if(dib == NULL)
+		{
+			lprintf(LOG_ERROR, "  tiling failed.\n");
+			return false;
+		}
+		dib_free(gr->_dib);
+		gr->_dib= dib;
 	}
-	dib_free(gr->_dib);
-	gr->_dib= dib;
 
 	lprintf(LOG_STATUS, "Tile preparation complete.\n");		
-	return TRUE;
+	return true;
 }
 
 //! Prepares map and meta map.
 /*!	Does map creation and layout, tileset reduction and map 
 	compression. Updates \a gr._dib with the new tileset, and fills 
-	in \a gr._map_rec and \a gr._meta_rec.
+	in \a gr._mapRec and \a gr._metaRec.
 	\note The work bitmap must be 8 bpp here, and already rearranged 
 	to a tile strip, which are the results of \c grit_prep_work_dib() 
 	and \c grit_prep_tiles(), respectively.
 */
-BOOL grit_prep_map(GRIT_REC *gr)
+bool grit_prep_map(GritRec *gr)
 {
 	lprintf(LOG_STATUS, "Map preparation.\n");		
 
+	if(gr->tileWidth != 8 || gr->tileHeight != 8)
+	{
+		lprintf(LOG_ERROR, "  Mapping only works with 8x8 tiles (for now)\n");
+		return false;
+	}
+
 	if(dib_get_bpp(gr->_dib) != 8)
 	{
-		lprintf(LOG_ERROR, 
-"  Mapping only works on 8bpp images.\n");
-		return FALSE;
+		lprintf(LOG_ERROR, "  Mapping only works on 8bpp images.\n");
+		return false;
 	}
 
 	int ii;
-	u32 flags;
+	//u32 flags;
 
 	// map variabes
 	int mapW, mapH, mapN;
 	u16 *mapD;
 	RECORD mapRec= { 0, 0, NULL };
 	
-	flags= gr->map_flags;
-	mapW= (gr->area_right-gr->area_left)/8;
-	mapH= (gr->area_bottom-gr->area_top)/8;
+	//# flags= gr->map_flags;
+	mapW= (gr->areaRight-gr->areaLeft)/8;
+	mapH= (gr->areaBottom-gr->areaTop)/8;
 	mapN= mapW*mapH;
 
-	// tileset variables
+	// Tileset variables
 	BYTE *tileD;
 	CLDIB *tileDib= gr->_dib, *rdxDib;
 
 	// --- Create base map ---
-	if(~flags & GRIT_RDX_ON)	// no reduction; tileD is all tiles
+
+	if(gr->mapRedux == GRIT_RDX_OFF)	// no reduction; tileD is all tiles
 	{
-		lprintf(LOG_STATUS, 
-"  No tile reduction.\n");
+		lprintf(LOG_STATUS, "  No tile reduction.\n");
 
 		mapRec.width= 2;
 		mapRec.height= mapN;
@@ -377,32 +400,29 @@ BOOL grit_prep_map(GRIT_REC *gr)
 	}
 	else					// reducing tiles
 	{
-		lprintf(LOG_STATUS, 
-"  Performing tile reduction: tiles%s%s\n", 
-			(flags & GRIT_RDX_FLIP ? ", flip" : ""), 
-			(flags & GRIT_RDX_PAL  ? ", palette" : "") );
+		lprintf(LOG_STATUS, "  Performing tile reduction: tiles%s%s\n", 
+			(gr->mapRedux & GRIT_RDX_FLIP ? ", flip" : ""), 
+			(gr->mapRedux & GRIT_RDX_PAL  ? ", palette" : "") );
 
-		// TODO: add external dib
-		if(gr->img_flags & GRIT_IMG_SHARED)
-			rdxDib= grit_tile_reduce(&mapRec, tileDib, flags, NULL);
-		else
-			rdxDib= grit_tile_reduce(&mapRec, tileDib, flags, 
+		// Switch for possible shared data.
+		if(gr->gfxIsShared)
+			rdxDib= grit_tile_reduce(&mapRec, tileDib, gr->mapRedux, 
 				gr->shared->dib);
-
+		else
+			rdxDib= grit_tile_reduce(&mapRec, tileDib, gr->mapRedux, NULL);
 
 		if(rdxDib == NULL)
 		{
 			free(mapRec.data);
-			lprintf(LOG_ERROR, 
-"  creation of tile DIB failed.\n");
-			return FALSE;
+			lprintf(LOG_ERROR, "  creation of tile DIB failed.\n");
+			return false;
 		}
 		dib_free(gr->_dib);
 		gr->_dib= rdxDib;
 
 		// Make extra copy for external tile dib
 		// PONDER: do I really need a copy for this?
-		if(gr->img_flags & GRIT_IMG_SHARED)
+		if(gr->gfxIsShared)
 		{
 			dib_free(gr->shared->dib);
 			gr->shared->dib= dib_clone(rdxDib);
@@ -412,13 +432,13 @@ BOOL grit_prep_map(GRIT_REC *gr)
 	mapD= (u16*)mapRec.data;
 
 	// --- Map tile offset ---
-	if(gr->map_ofs)
+	if(gr->mapOffset)
 	{
-		lprintf(LOG_ERROR, 
-"  Applying tile offset (0x%08X).\n", gr->map_ofs);
+		lprintf(LOG_STATUS, "  Applying tile offset (0x%08X).\n", 
+			gr->mapOffset);
 
-		u32 se, base= gr->map_ofs&~OFS_BASE0;
-		BOOL bBase0= gr->map_ofs&OFS_BASE0;
+		u32 se, base= gr->mapOffset &~ OFS_BASE0;
+		bool bBase0= (gr->mapOffset & OFS_BASE0) != 0;
 		for(ii=0; ii<mapN; ii++)
 		{
 			se= mapD[ii]&SE_ID_MASK;
@@ -433,15 +453,16 @@ BOOL grit_prep_map(GRIT_REC *gr)
 	int metaW, metaH, metaN;
 	RECORD metaRec= { 0, 0, NULL };
 
-	metaW= gr->meta_width;
-	metaH= gr->meta_height;
+	metaW= gr->metaWidth;
+	metaH= gr->metaHeight;
 	metaN= metaW*metaH;
-	if(metaN > 1)
+	if(grit_is_metatiled(gr))
 	{
-		lprintf(LOG_STATUS, 
-"  Performing metatile reduction (%d, %d).\n", metaW, metaH);
+		lprintf(LOG_STATUS, "  Performing metatile reduction (%d, %d).\n", 
+			metaW, metaH);
 
-		RECORD *rec= grit_meta_reduce(&metaRec, &mapRec, metaN, flags);
+		RECORD *rec= grit_meta_reduce(&metaRec, &mapRec, metaN, gr->mapRedux);
+
 		// Relay mapRec to use the reduced metatile set
 		if(rec)
 		{
@@ -453,10 +474,10 @@ BOOL grit_prep_map(GRIT_REC *gr)
 	mapD= (u16*)mapRec.data;
 
 	// Layout for affine (basically halfword->byte)
-	if(flags & GRIT_MAP_AFF)
+	if(gr->mapLayout == GRIT_MAP_AFFINE)
 	{
-		lprintf(LOG_STATUS, 
-"  Converting to affine layout.\n", metaW, metaH);
+		lprintf(LOG_STATUS, "  Converting to affine layout.\n", 
+			metaW, metaH);
 
 		int size= rec_size(&mapRec);
 		BYTE *buf= (BYTE*)malloc(size);
@@ -471,23 +492,23 @@ BOOL grit_prep_map(GRIT_REC *gr)
 			mapRec.height= size;
 		}
 	}
-	if( BYTE_ORDER == BIG_ENDIAN && (~flags & GRIT_MAP_AFF) )
+	if( BYTE_ORDER == BIG_ENDIAN && gr->mapLayout != GRIT_MAP_AFFINE )
 		data_byte_rev(mapRec.data, mapRec.data, rec_size(&mapRec), 2);		
 
-	// compress map
-	grit_compress(&mapRec, &mapRec, flags);
-	rec_alias(&gr->_map_rec, &mapRec);
-	rec_alias(&gr->_meta_rec, &metaRec);
+	// Compress map
+	grit_compress(&mapRec, &mapRec, gr->mapCompression);
+	rec_alias(&gr->_mapRec, &mapRec);
+	rec_alias(&gr->_metaRec, &metaRec);
 
 	lprintf(LOG_STATUS, "Map preparation complete.\n");		
-	return TRUE;
+	return true;
 }
 
 //! Image data preparation.
 /*!	Prepares the work dib for export, i.e. converts to the final 
-	bitdepth, compresses the data and fills in \a gr._img_rec.
+	bitdepth, compresses the data and fills in \a gr._gfxRec.
 */
-BOOL grit_prep_img(GRIT_REC *gr)
+bool grit_prep_gfx(GritRec *gr)
 {
 	lprintf(LOG_STATUS, "Graphics preparation.\n");		
 
@@ -496,7 +517,7 @@ BOOL grit_prep_img(GRIT_REC *gr)
 	int srcS= dib_get_size_img(gr->_dib);
 	BYTE *srcD= dib_get_img(gr->_dib);
 
-	int dstB= gr->img_bpp;
+	int dstB= gr->gfxBpp;
 	// # dst bytes, with # src pixels as 'width'
 	int dstS= dib_align(srcS*8/srcB, dstB);
 	dstS= ALIGN4(dstS);
@@ -504,7 +525,7 @@ BOOL grit_prep_img(GRIT_REC *gr)
 	if(dstD == NULL)
 	{
 		lprintf(LOG_ERROR, "  Can't allocate graphics data.\n");
-		return FALSE;
+		return false;
 	}
 
 	// Convert to final bitdepth
@@ -515,8 +536,8 @@ BOOL grit_prep_img(GRIT_REC *gr)
 	// TODO: offset
 	if(srcB == 8 && srcB != dstB)
 	{
-		lprintf(LOG_STATUS, 
-"  Bitpacking: %d -> %d.\n", srcB, dstB);
+		lprintf(LOG_STATUS, "  Bitpacking: %d -> %d.\n", 
+			srcB, dstB);
 		data_bit_pack(dstD, srcD, srcS, srcB, dstB, 0);
 	}
 	else
@@ -524,22 +545,22 @@ BOOL grit_prep_img(GRIT_REC *gr)
 
 	RECORD rec= { 1, dstS, dstD };
 
-	if( BYTE_ORDER == BIG_ENDIAN && gr->img_bpp == 16 )
+	if( BYTE_ORDER == BIG_ENDIAN && gr->gfxBpp == 16 )
 		data_byte_rev(rec.data, rec.data, rec_size(&rec), 2);		
 
 	// attach and compress graphics
-	grit_compress(&rec, &rec, gr->img_flags);
-	rec_alias(&gr->_img_rec, &rec);
+	grit_compress(&rec, &rec, gr->gfxCompression);
+	rec_alias(&gr->_gfxRec, &rec);
 
 	lprintf(LOG_STATUS, "Graphics preparation complete.\n");		
-	return TRUE;
+	return true;
 }
 
 //! Palette data preparation
 /*!	Converts palette to 16bit GBA colors, compresses it and fills in 
-	\a gr._pal_rec.	
+	\a gr._palRec.	
 */
-BOOL grit_prep_pal(GRIT_REC *gr)
+bool grit_prep_pal(GritRec *gr)
 {
 	lprintf(LOG_STATUS, "Palette preparation.\n");		
 
@@ -547,13 +568,13 @@ BOOL grit_prep_pal(GRIT_REC *gr)
 	COLOR *palOut;
 	RGBQUAD *palIn;
 
-	nclrs= gr->pal_end - gr->pal_start;
+	nclrs= gr->palEnd - gr->palStart;
 	if(dib_get_nclrs(gr->_dib) < nclrs && nclrs != 0)
 		nclrs= dib_get_nclrs(gr->_dib);
 
-	palS= ALIGN4(nclrs*sizeof(COLOR));
+	palS= nclrs*sizeof(COLOR);
 	palOut= (COLOR*)malloc(palS);
-	palIn= &dib_get_pal(gr->_dib)[gr->pal_start];
+	palIn= &dib_get_pal(gr->_dib)[gr->palStart];
 
 	for(ii=0; ii<nclrs; ii++)
 		palOut[ii]= RGB16(palIn[ii].rgbBlue, palIn[ii].rgbGreen, 
@@ -564,12 +585,12 @@ BOOL grit_prep_pal(GRIT_REC *gr)
 	if( BYTE_ORDER == BIG_ENDIAN )
 		data_byte_rev(rec.data, rec.data, rec_size(&rec), 2);		
 
-	// attach and compress palette
-	grit_compress(&rec, &rec, gr->pal_flags);
-	rec_alias(&gr->_pal_rec, &rec);
+	// Attach and compress palette
+	grit_compress(&rec, &rec, gr->palCompression);
+	rec_alias(&gr->_palRec, &rec);
 
 	lprintf(LOG_STATUS, "Palette preparation complete.\n");		
-	return TRUE;
+	return true;
 }
 
 
@@ -601,9 +622,9 @@ u16 grit_find_tile_pal(BYTE *tileD)
 	\param y_xor Use 7 for vert-flip check, 0 for normal.
 	\param mask Checks only specific bits.
 	  (0x0F for pal-banked, 0xFF for full palette)
-	\return \c TRUE if tiles are equal, \c FALSE of they're not.
+	\return \c true if tiles are equal, \c false of they're not.
 */
-BOOL grit_tile_cmp(BYTE *test, BYTE *base, u32 x_xor, u32 y_xor, BYTE mask)
+bool grit_tile_cmp(BYTE *test, BYTE *base, u32 x_xor, u32 y_xor, BYTE mask)
 {
 	int ix, iy;
 	for(iy=0; iy<8; iy++)
@@ -611,10 +632,10 @@ BOOL grit_tile_cmp(BYTE *test, BYTE *base, u32 x_xor, u32 y_xor, BYTE mask)
 		for(ix=0; ix<8; ix++)
 		{	
 			if( (test[(iy^y_xor)*8+(ix^x_xor)]&mask) != (base[iy*8+ix]&mask) )
-				return FALSE;
+				return false;
 		}
 	}
-	return TRUE;
+	return true;
 }
 
 //! Creates tilemap and reduces tileset

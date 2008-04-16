@@ -1,0 +1,1 @@
+<Project name="grit"><Folder name="gritsrc"><File path="srcgrit\cli.h"></File><File path="srcgrit\cli.cpp"></File><File path="srcgrit\grit_main.cpp"></File></Folder><File path="Makefile"></File></Project>

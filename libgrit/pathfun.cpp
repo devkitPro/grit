@@ -1,7 +1,7 @@
 //
 // pathfun.cpp
 //   Path/file functions
-// (20050826 - 2001121, cearn)
+// (20050826 - 20071121, cearn)
 //
 // === NOTES === 
 // * 20070401, jv:
@@ -19,9 +19,8 @@
 #include "pathfun.h"
 
 #ifdef _MSC_VER
-
 	#ifndef PATH_MAX
-	#define PATH_MAX MAX_PATH
+	#define PATH_MAX	MAX_PATH
 	#endif
 
 	#ifndef MAXPATHLEN
@@ -37,6 +36,8 @@
 // --------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------
+
+#define ALIGN4(n) ( ((n)+3)&~3 )
 
 
 const char cTypeSpec[]= "extern const unsigned";
@@ -241,12 +242,12 @@ char *path_repl_ext(char *dst, const char *path, const char *ext, int size)
 	if(!isempty(ext))	// Replace
 	{
 		if(pext)
-			strcpy(pext, ext);			
-	    else
-	    {
-	        strcat(str, ".");
-	        strcat(str, ext);
-	    }
+			strcpy(pext, ext);
+		else
+		{
+			strcat(str, ".");
+			strcat(str, ext);
+		}
 	}
 	else				// Remove
 	{
@@ -608,6 +609,41 @@ long file_find_tag(FILE *fout, FILE *fin, const char *tag)
 }
 
 
+//! Write a comment to a file.
+/*!	Places \a text behind \a cmt comments, taking 
+	newlines into account as well.
+	\param fp	File handle.
+	\param cmt	Comment symbol.
+	\param text	Strong to comment.
+	\note	Checks for '\n', but I'm unsure if 
+		that's enough for all platforms (Read: '\r' screws up on windows forms).
+*/
+void file_write_cmt(FILE *fp, const char *cmt, const char *text)
+{
+	const char *pstart= text, *pend;
+
+	pend= strchr(pstart, '\n');
+	while(pend)
+	{
+		fprintf(fp, "%s ", cmt);
+
+		fwrite(pstart, 1, pend-pstart+1, fp);
+		pstart= pend+1;
+		pend= strchr(pstart, '\n');
+	}
+
+	// Print remaining string, if any
+	if(pstart[0] != '\0')
+		fprintf(fp, "%s %s\n", cmt, pstart);
+}
+
+/*
+Berka!
+Berka!
+Berka!
+*/
+
+
 // --------------------------------------------------------------------
 // DATA EXPORT FUNCTIONS
 // --------------------------------------------------------------------
@@ -629,7 +665,7 @@ bool xp_array_c(FILE *fp, const char *symname,
 
 	// NOTE: no EOL break
 	fprintf(fp, "const unsigned %s %s[%d]=\n{", 
-		cCTypes[chunk], symname, (len+chunk-1)/chunk);
+		cCTypes[chunk], symname, ALIGN4(len)/chunk);
 	
 	xp_data_c(fp, data, len, chunk);
 
@@ -705,7 +741,7 @@ bool xp_array_gas(FILE *fp, const char *symname,
 	fputs("\t.section .rodata\n\t.align\t2\n", fp);
 	// NOTE: no EOL break
 	fprintf(fp, "\t.global %s\t\t@ %d unsigned chars\n%s:", 
-		symname, (len+chunk-1)/chunk*chunk, symname);
+		symname, ALIGN4(len), symname);
 	
 	xp_data_gas(fp, data, len, chunk);
 

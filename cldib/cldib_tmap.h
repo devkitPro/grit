@@ -56,7 +56,15 @@
 typedef struct TMapEntry
 {
 	WORD index;				//!< Tile index
-	WORD attr;				//!< Tile attributes (ME_FLAGS)
+	union {
+		WORD attr;			//!< Tile attributes (ME_FLAGS)
+		struct {
+			WORD tile	:10;
+			WORD hflip	: 1;
+			WORD vflip	: 1;
+			WORD pal	: 4;
+		};
+	};
 } TMapEntry;
 
 

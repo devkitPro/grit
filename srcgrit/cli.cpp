@@ -1,60 +1,66 @@
 //
 //! \file cli.cpp
 //!  Command line interface
-//! \date 20050823 - 20070725
+//! \date 20050823 - 20080130
 //! \author gauauu, cearn
-// === NOTES ===
+/* === NOTES ===
+*/
 
 #include "cli.h"
 #include <string.h>
-#include <stdlib.h>
 
-
-int cli_find_key(const char *key, int argc, char **argv)
+//! Find a key in a string array.
+/*!	\return key index or length of array if not found.
+*/
+int cli_find_key(const char *key, const strvec &opts)
 {
 	int ii;
-	for(ii=1; ii<argc; ii++)
-		if(strncmp(key, argv[ii], strlen(key)) == 0)
-			return ii;
-	return argc;
+	for(ii=1; ii<opts.size(); ii++)
+		if(strncmp(key, opts[ii], strlen(key)) == 0)
+			break;
+
+	return ii;
 }
 
-int cli_bool(const char *key, int argc, char **argv)
+//! Return whether \a key is present in \a opts.
+bool cli_bool(const char *key, const strvec &opts)
 {
-	int pos = cli_find_key(key, argc, argv);
-	if(pos >= argc)
-		return 0;
-	return 1;
+	return cli_find_key(key, opts) < opts.size();
 }
 
-int cli_int(const char *key, int argc, char **argv, int deflt)
+//! Return the integer following \a key, or \a dflt if \a key not found.
+int cli_int(const char *key, const strvec &opts, int dflt)
 {
-	int pos = cli_find_key(key, argc, argv);
-	if(pos >= argc)
-		return deflt;
+	int pos = cli_find_key(key, opts);
+	if(pos >= opts.size())
+		return dflt;
 
-	char *str= &argv[pos][strlen(key)];
+	char *str= &opts[pos][strlen(key)];
 
-	if(*str != '\0')			// attached field
+	if(*str != '\0')					// attached field
 		return strtoul(str, NULL, 0);
-	if(pos == argc-1)			// separate field, but OOB
-		return deflt;
-	return atoi(argv[pos+1]);
+
+	if(pos == opts.size()-1)			// separate field, but OOB
+		return dflt;
+
+	return strtoul(opts[pos+1], NULL, 0);
 }
 
-char *cli_str(const char *key, int argc, char **argv, char *deflt)
+//! Return the string following \a key, or \a dflt if \a key not found.
+char *cli_str(const char *key, const strvec &opts, char *dflt)
 {
-	int pos = cli_find_key(key, argc, argv);
-	if(pos >= argc)
-		return deflt;
+	int pos = cli_find_key(key, opts);
+	if(pos >= opts.size())
+		return dflt;
 
-	char *str= &argv[pos][strlen(key)];
-
-	if(*str != '\0')			// attached field
+	char *str= &opts[pos][strlen(key)];
+	if(*str != '\0')					// attached field
 		return str;
-	if(pos == argc-1)			// separate field, but OOB
-		return deflt;
-	return argv[pos+1];
+
+	if(pos == opts.size()-1)			// separate field, but OOB
+		return dflt;
+
+	return opts[pos+1];
 }
 
 // TODO cli_range ... somehow :P

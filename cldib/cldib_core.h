@@ -32,6 +32,11 @@
 
 #define INLINE static inline	//<! For portable inline functions
 
+
+//! Get the number of elements in an array.
+#define countof(array) ( sizeof(array)/sizeof(array[0]) )
+
+
 // Like all good scientists, I too am a lazy bastard :P
 #define BMIH_SIZE		sizeof(BITMAPINFOHEADER)
 #define RGB_SIZE		sizeof(RGBQUAD)
@@ -62,25 +67,7 @@
 
 // --- utility macros ---
 
-//! Massage \a x for use in bitfield \a name.
-#define BF_PREP(x, name)	( ((x)<<name##_SHIFT) & name##_MASK )
-
-//! Get the value of bitfield \a name from \a y. Equivalent to (var=) y.name
-#define BF_GET(y, name)		( ((y) & name##_MASK)>>name##_SHIFT )
-
-//! Set bitfield \a name from \a y to \a x: y.name= x.
-#define BF_SET(y, x, name)	(y = ((y)&~name##_MASK) | BF_PREP(x,name) )
-
-//! Massage \a x for use in bitfield \a name with pre-shifted \a x
-#define BF_PREP2(x, name)	( (x) & name##_MASK )
-
-//! Get the value of bitfield \a name from \a y, but don't down-shift
-#define BF_GET2(y, name)	( (y) & name##_MASK )
-
-//! Set bitfield \a name from \a y to \a x with pre-shifted \a x
-#define BF_SET2(y, x, name)	(y = ((y)&~name##_MASK) | BF_PREP2(x,name) )
-
-
+INLINE unsigned int align(unsigned int x, unsigned int size);
 INLINE int clamp(int x, int min, int max);
 INLINE int reflect(int x, int min, int max);
 INLINE int wrap(int x, int min, int max);
@@ -216,6 +203,9 @@ BOOL dib_save_##_type##(const char *fpath, CLDIB *dib)
 /*! \addtogroup grpColor
 *	\{
 */
+
+CLDIB *dib_swap_rgb(CLDIB *dib);
+
 // --- several useful INLINEs ---
 INLINE COLORREF rgb2clr(RGBQUAD rgb);			// RGBQUAD -> COLORREF
 INLINE RGBQUAD clr2rgb(COLORREF clr);			// COLORREF -> RGBQUAD
@@ -309,6 +299,10 @@ int hbm_blit(HDC hdc, int dX, int dY, int dW, int dH,
 // --------------------------------------------------------------------
 
 // === MISC ===
+
+//! Align a value to the next multiple of \a size
+INLINE unsigned int align(unsigned int x, unsigned int size)
+{	return (x+size-1)/size*size;	}
 
 //! Truncates \a x to stay in range [\a min, \a max>
 /*!	\return Truncated value of \a x.

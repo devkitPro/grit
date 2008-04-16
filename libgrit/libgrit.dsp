@@ -85,6 +85,10 @@ LIB32=link.exe -lib
 # PROP Default_Filter "h;hpp;hxx;hm;inl"
 # Begin Source File
 
+SOURCE=.\cprs.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\grit.h
 # End Source File
 # Begin Source File
@@ -105,15 +109,23 @@ SOURCE=.\pathfun.h
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;idl;hpj;bat"
 # Begin Source File
 
+SOURCE=.\cprs.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\cprs_huff.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\cprs_lz.cpp
+# End Source File
+# Begin Source File
+
+SOURCE=.\cprs_rle.cpp
+# End Source File
+# Begin Source File
+
 SOURCE=.\grit_core.cpp
-# End Source File
-# Begin Source File
-
-SOURCE=.\grit_huff.cpp
-# End Source File
-# Begin Source File
-
-SOURCE=.\grit_lz.cpp
 # End Source File
 # Begin Source File
 
@@ -122,10 +134,6 @@ SOURCE=.\grit_misc.cpp
 # Begin Source File
 
 SOURCE=.\grit_prep.cpp
-# End Source File
-# Begin Source File
-
-SOURCE=.\grit_rle.cpp
 # End Source File
 # Begin Source File
 

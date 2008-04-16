@@ -1,23 +1,27 @@
 //
 //! \file grit_xp.cpp
 //!   Exporter routines
-//! \date 20050814 - 20070401
+//! \date 20050814 - 20080212
 //! \author cearn
 //
-// === NOTES ===
-// * 20070401: 
-//   - Fixed directory issues
-//   - Updated preface
-// * 20061121: xp to source now use block tags so that append *replaces* 
-//   old blocks instead of just tagging new ones on. This is a Good Thing.
-//   What isn't a good think is how xp_h(), xp_c(), xp_gas() now have 
-//   large and identical start/begin blocks to make it happen. The 
-//   functions I use to search/copy in the existing files could prolly 
-//   be improved too.
-//   Also, I'm using tmpnam(), which apparently isn't recommended due to 
-//   safety, but I don't know a suitable, portable alternative.
-// * strupr for non-msvc
-// * PATH_MAX -> MAXPATHLEN; added path_fix_sep() use.
+/* === NOTES ===
+  * 20080211,jv:
+	- added DataItem. To be expanded later.
+	- added grf format.
+  * 20070401: 
+	- Fixed directory issues
+	- Updated preface
+  * 20061121: xp to source now use block tags so that append *replaces* 
+	old blocks instead of just tagging new ones on. This is a Good Thing.
+	What isn't a good thing is how xp_h(), xp_c(), xp_gas() now have 
+	large and identical start/begin blocks to make it happen. The 
+	functions I use to search/copy in the existing files could prolly 
+	be improved too.
+	Also, I'm using tmpnam(), which apparently isn't recommended due to 
+	safety, but I don't know a suitable, portable alternative.
+  * strupr for non-msvc
+  * PATH_MAX -> MAXPATHLEN; added path_fix_sep() use.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -39,6 +43,27 @@ static const char GBFS_magic[] = "PinEightGBFS\r\n\032\n";
 // CLASSES
 // --------------------------------------------------------------------
 
+//! Data item struct (for gfx, map, etc). 
+/*! \note	Not very pretty or safe yet, but it does clean up the place. 
+*/
+class DataItem
+{
+public:
+	DataItem() : procMode(GRIT_EXCLUDE), dataType(GRIT_U16), 
+		compression(GRIT_CPRS_OFF), name(NULL), pRec(NULL) { }
+	~DataItem()	{	free(name);	}
+public:
+	echar	procMode;
+	echar	dataType;
+	echar	compression;
+	char	*name;			//!< Symbol name.
+	RECORD	*pRec;			//!< Pointer to external data-record.
+};
+
+bool grit_prep_item(GritRec *gr, eint id, DataItem *item);
+
+
+// --- GBFS components ---
 
 typedef struct GBFS_FILE
 {
@@ -60,35 +85,67 @@ typedef struct GBFS_ENTRY
 #define GBEN_SIZE sizeof(GBFS_ENTRY)
 
 
+int gbfs_namecmp(const void *a, const void *b);
+int grit_gbfs_entry_init(GBFS_ENTRY *gben, const RECORD *rec, 
+	const char *basename, int affix);
+
+
+// --- GRF components ---
+
+struct chunk_t
+{
+	char	id[4];
+	u32		size;
+	u8		data[1];
+};
+
+struct GrfHeader
+{
+	union {
+		u8 attrs[4];
+		struct {
+			u8	gfxAttr, mapAttr, mmapAttr, palAttr;
+		};
+	};
+	u8	tileWidth, tileHeight;
+	u8	metaWidth, metaHeight;
+	u32	gfxWidth, gfxHeight;
+};
+
+chunk_t *chunk_create(const char *id, const RECORD *rec);
+chunk_t *chunk_create(const char *id, const void *data, uint size);
+void chunk_free(chunk_t *chunk);
+chunk_t *chunk_merge(const char *id, chunk_t *cklist[], uint count, 
+	const char *groupID);
+
+chunk_t *grit_prep_grf(GritRec *gr);
+
+
 // --------------------------------------------------------------------
 // PROTOTYPES
 // --------------------------------------------------------------------
 
 
-// C export
-BOOL grit_xp_c(GRIT_REC *gr);
+bool grit_xp_c(GritRec *gr);
+bool grit_xp_gas(GritRec *gr);
+bool grit_xp_bin(GritRec *gr);
+bool grit_xp_gbfs(GritRec *gr);
+bool grit_xp_grf(GritRec *gr);
 
-// GAS export
-BOOL grit_xp_gas(GRIT_REC *gr);
-
-
-// BIN export
-BOOL grit_xp_bin(GRIT_REC *gr);
-
-// GBFS export
-BOOL grit_xp_gbfs(GRIT_REC *gr);
 
 // ELF export
-//BOOL grit_xp_o(GRIT_REC *gr);
-//BOOL xp_array_o(FILE *fp, const char *varname, 
+//bool grit_xp_o(GritRec *gr);
+//bool xp_array_o(FILE *fp, const char *varname, 
 //	const BYTE *data, int len, int chunk);
-//BOOL xp_data_o(FILE *fp, const BYTE *data, int len, int chunk);
+//bool xp_data_o(FILE *fp, const BYTE *data, int len, int chunk);
 
 // misc
+void grit_xp_decl(FILE *fp, const DataItem *item);
 void grit_xp_decl(FILE *fp, int chunk, const char *name, int affix, int len);
-BOOL grit_xp_h(GRIT_REC *gr);
-BOOL grit_preface(GRIT_REC *gr, FILE *fp, const char *cmt);
+bool grit_xp_h(GritRec *gr);
+bool grit_preface(GritRec *gr, FILE *fp, const char *cmt);
 
+uint grit_xp_total_size(GritRec *gr);
 
 // --------------------------------------------------------------------
 // FUNCTIONS
@@ -100,65 +157,155 @@ BOOL grit_preface(GRIT_REC *gr, FILE *fp, const char *cmt);
 	Call this after all preparation is complete to export to the
 	various file formats.
 */
-BOOL grit_export(GRIT_REC *gr)
+bool grit_export(GritRec *gr)
 {
-	// header file
-	if(gr->file_flags & GRIT_FILE_H)
+	// Header file
+	if(gr->bHeader)
 		grit_xp_h(gr);
 
-	// and the rest
-	switch(gr->file_flags & GRIT_FTYPE_MASK)
+	// And the rest
+	switch(gr->fileType)
 	{
-	case GRIT_FILE_C:
-		grit_xp_c(gr);	break;
-	case GRIT_FILE_S:
+	case GRIT_FTYPE_C:
+		grit_xp_c(gr);		break;
+
+	case GRIT_FTYPE_S:
 		grit_xp_gas(gr);	break;
-	case GRIT_FILE_BIN:
+
+	case GRIT_FTYPE_BIN:
 		grit_xp_bin(gr);	break;
-	case GRIT_FILE_GBFS:
+
+	case GRIT_FTYPE_GBFS:
 		grit_xp_gbfs(gr);	break;
-	//case GRIT_FILE_O:
+
+	case GRIT_FTYPE_GRF:
+		grit_xp_grf(gr);	break;
+
+	//case GRIT_FTYPE_O:
 	//	grit_xp_o(gr);	break;
 	default:
-		return FALSE;
+		return false;
 	}
 
-	return TRUE;
+	return true;
 }
 
-// ====================================================================
-// === EXPORT TO C ====================================================
+//! Get size of exported data.
+uint grit_xp_size(GritRec *gr)
+{
+	uint size= 0;
+	uint extra=0;
+
+	if(gr->bRiff)
+	{
+		size= 8+8+8+sizeof(GrfHeader);	// RIFF + GRF + HDR overhead.
+		extra= 8;
+	}
+
+	if(gr->gfxProcMode == GRIT_EXPORT)
+		size += ALIGN4(rec_size(&gr->_gfxRec)) + extra;
+
+	if(gr->mapProcMode == GRIT_EXPORT)
+		size += ALIGN4(rec_size(&gr->_mapRec)) + extra;
+
+	if(gr->mapProcMode == GRIT_EXPORT && grit_is_metatiled(gr))
+		size += ALIGN4(rec_size(&gr->_metaRec)) + extra;
+
+	if(gr->palProcMode == GRIT_EXPORT)
+		size += ALIGN4(rec_size(&gr->_palRec)) + extra;
+
+	return size;
+}
+
+
+//! Prepare an item for later exportation.
+bool grit_prep_item(GritRec *gr, eint id, DataItem *item)
+{
+	char str[MAXPATHLEN];
+
+	// Yes this is very, very, ugly and yes it will be straightened out 
+	// in due time.
+	switch(id)
+	{
+	case GRIT_ITEM_GFX:		// Graphics item
+		item->procMode= gr->gfxProcMode;
+		item->dataType= gr->gfxDataType;
+		item->compression= gr->gfxCompression;
+		item->pRec= &gr->_gfxRec;
+
+		strcat(strcpy(str, gr->symName), 
+			cAffix[grit_is_bmp(gr) ? E_BM : E_TILE]);
+		strrepl(&item->name, str);
+		return true;
+
+	case GRIT_ITEM_MAP:		// Map item
+		item->procMode= gr->mapProcMode;
+		item->dataType= gr->mapDataType;
+		item->compression= gr->mapCompression;
+		item->pRec= &gr->_mapRec;	
+
+		strcat(strcpy(str, gr->symName), cAffix[E_MAP]);
+		strrepl(&item->name, str);
+		return true;
+
+	case GRIT_ITEM_METAMAP:		// Metamap item
+		item->procMode= grit_is_metatiled(gr) ? gr->mapProcMode : GRIT_EXCLUDE;
+		item->dataType= gr->mapDataType;
+		item->compression= gr->mapCompression;
+		item->pRec= &gr->_metaRec;	
+
+		strcat(strcpy(str, gr->symName), cAffix[E_META]);
+		strrepl(&item->name, str);
+		return true;
+
+	case GRIT_ITEM_PAL:
+		item->procMode= gr->palProcMode;
+		item->dataType= gr->palDataType;
+		item->compression= gr->palCompression;
+		item->pRec= &gr->_palRec;	
+
+		strcat(strcpy(str, gr->symName), cAffix[E_PAL]);
+		strrepl(&item->name, str);
+		return true;
+	}
+
+	return false;
+}
+
+
+// --------------------------------------------------------------------
+// EXPORT TO C
+// --------------------------------------------------------------------
+
 
 //! Export to C source file.
-BOOL grit_xp_c(GRIT_REC *gr)
+bool grit_xp_c(GritRec *gr)
 {
-
 	char str[MAXPATHLEN];
 	char tag[MAXPATHLEN], fpath[MAXPATHLEN], tmppath[MAXPATHLEN];
 	long pos= -1;
 	FILE *fin, *fout;
-	BOOL bAppend= gr->file_flags & GRIT_FILE_CAT;
+	bool bAppend= gr->bAppend;
 
 	// Prep begin tag
-	sprintf(tag, "//{{BLOCK(%s)",gr->sym_name);
+	sprintf(tag, "//{{BLOCK(%s)",gr->symName);
 
 	// Open 'output' file
-	strcpy(fpath, gr->dst_path);
+	strcpy(fpath, gr->dstPath);
 
-
-	lprintf(LOG_STATUS, 
-"Export to C: %s into %s .\n", gr->sym_name, fpath);		
+	lprintf(LOG_STATUS, "Export to C: %s into %s .\n", 
+		gr->symName, fpath);		
 
 	// File doesn't exist -> write-mode only
 	if(!file_exists(fpath))
-		bAppend=FALSE;
+		bAppend= false;
 
 	if(bAppend)
 	{
 		// Open temp and input file
 		tmpnam(tmppath);
 		if( (fout=fopen(tmppath, "w")) == NULL)
-			return FALSE;
+			return false;
 
 		fin= fopen(fpath, "r");
 		pos= file_find_tag(fout, fin, tag);
@@ -176,39 +323,29 @@ BOOL grit_xp_c(GRIT_REC *gr)
 
 	grit_preface(gr, fout, "//");
 
-	if(gr->pal_flags & GRIT_INCL)
+	if(gr->bRiff)	// Single GRF item
 	{
-		strcpy(str, gr->sym_name);
-		strcat(str, cAffix[E_PAL]);
-		xp_array_c(fout, str, gr->_pal_rec.data, rec_size(&gr->_pal_rec),
-			GRIT_CHUNK(gr, pal));
+		chunk_t *chunk= grit_prep_grf(gr);
+		strcat(strcpy(str, gr->symName), "Grf");
+
+		xp_array_c(fout, str, chunk, chunk->size+8, 
+			grit_type_size(gr->gfxDataType));
+
+		chunk_free(chunk);
 	}
-
-	if(gr->img_flags & GRIT_INCL)
+	else			// Separate items
 	{
-		strcpy(str, gr->sym_name);
-		strcat(str, (GRIT_IS_BMP(gr) ? cAffix[E_BM] : cAffix[E_TILE]) );
-		xp_array_c(fout, str, gr->_img_rec.data, rec_size(&gr->_img_rec),
-			GRIT_CHUNK(gr, img));
-	}
-
-	if(gr->map_flags & GRIT_INCL)
-	{
-		strcpy(str, gr->sym_name);
-		strcat(str, cAffix[E_MAP]);
-		xp_array_c(fout, str, gr->_map_rec.data, rec_size(&gr->_map_rec),
-			GRIT_CHUNK(gr, map));
-
-		if(gr->meta_width*gr->meta_height >1)
+		DataItem item;
+		for(eint id=GRIT_ITEM_GFX; id<GRIT_ITEM_MAX; id++)
 		{
-			strcpy(str, gr->sym_name);
-			strcat(str, cAffix[E_META]);
-			xp_array_c(fout, str, gr->_meta_rec.data, rec_size(&gr->_meta_rec),
-				GRIT_CHUNK(gr, map));
+			grit_prep_item(gr, id, &item);
+			if(item.procMode == GRIT_EXPORT)
+				xp_array_c(fout, item.name, item.pRec->data, 
+					rec_size(item.pRec), grit_type_size(item.dataType));					
 		}
 	}
 
-	sprintf(tag, "//}}BLOCK(%s)",gr->sym_name);
+	sprintf(tag, "//}}BLOCK(%s)",gr->symName);
 	fprintf(fout, "%s\n", tag);
 
 	// --- End grit-block ---
@@ -230,44 +367,45 @@ BOOL grit_xp_c(GRIT_REC *gr)
 		fclose(fout);		// close files
 	}
 
-	return TRUE;
+	return true;
 }
 
 
-// ====================================================================
-// === EXPORT TO GNU ASM ==============================================
+// --------------------------------------------------------------------
+// EXPORT TO ASM
+// --------------------------------------------------------------------
+
 
 //! Export to GNU Assembly
 // Yes, it is almost identical to c. Maybe I'll merge the two 
 // later.
-BOOL grit_xp_gas(GRIT_REC *gr)
+bool grit_xp_gas(GritRec *gr)
 {
 	char str[MAXPATHLEN];
 	char tag[MAXPATHLEN], fpath[MAXPATHLEN], tmppath[MAXPATHLEN];
 	long pos= -1;
 	FILE *fin, *fout;
-	BOOL bAppend= gr->file_flags & GRIT_FILE_CAT;
+	bool bAppend= gr->bAppend;
 
 	// Prep begin tag
-	sprintf(tag, "@{{BLOCK(%s)",gr->sym_name);
+	sprintf(tag, "@{{BLOCK(%s)",gr->symName);
 
 	// Open 'output' file
-	strcpy(fpath, gr->dst_path);
+	strcpy(fpath, gr->dstPath);
 
-
-	lprintf(LOG_STATUS, 
-"Export to GNU asm: %s into %s .\n", gr->sym_name, fpath);		
+	lprintf(LOG_STATUS, "Export to GNU asm: %s into %s .\n", 
+		gr->symName, fpath);		
 
 	// File doesn't exist -> write-mode only
 	if(!file_exists(fpath))
-		bAppend=FALSE;
+		bAppend=false;
 
 	if(bAppend)
 	{
 		// Open temp and input file
 		tmpnam(tmppath);
 		if( (fout=fopen(tmppath, "w")) == NULL)
-			return FALSE;
+			return false;
 
 		fin= fopen(fpath, "r");
 		pos= file_find_tag(fout, fin, tag);
@@ -285,39 +423,30 @@ BOOL grit_xp_gas(GRIT_REC *gr)
 
 	grit_preface(gr, fout, "@");
 
-	if(gr->pal_flags & GRIT_INCL)
+
+	if(gr->bRiff)	// Single GRF item
 	{
-		strcpy(str, gr->sym_name);
-		strcat(str, cAffix[E_PAL]);
-		xp_array_gas(fout, str, gr->_pal_rec.data, rec_size(&gr->_pal_rec),
-			GRIT_CHUNK(gr, pal));
+		chunk_t *chunk= grit_prep_grf(gr);
+		strcat(strcpy(str, gr->symName), "Grf");
+
+		xp_array_gas(fout, str, chunk, chunk->size+8, 
+			grit_type_size(gr->gfxDataType));
+
+		chunk_free(chunk);
 	}
-
-	if(gr->img_flags & GRIT_INCL)
+	else			// Separate items
 	{
-		strcpy(str, gr->sym_name);
-		strcat(str, (GRIT_IS_BMP(gr) ? cAffix[E_BM] : cAffix[E_TILE]) );
-		xp_array_gas(fout, str, gr->_img_rec.data, rec_size(&gr->_img_rec),
-			GRIT_CHUNK(gr, img));
-	}
-
-	if(gr->map_flags & GRIT_INCL)
-	{
-		strcpy(str, gr->sym_name);
-		strcat(str, cAffix[E_MAP]);
-		xp_array_gas(fout, str, gr->_map_rec.data, rec_size(&gr->_map_rec),
-			GRIT_CHUNK(gr, map));
-
-		if(gr->meta_width*gr->meta_height >1)
+		DataItem item;
+		for(eint id=GRIT_ITEM_GFX; id<GRIT_ITEM_MAX; id++)
 		{
-			strcpy(str, gr->sym_name);
-			strcat(str, cAffix[E_META]);
-			xp_array_gas(fout, str, gr->_meta_rec.data, rec_size(&gr->_meta_rec),
-				GRIT_CHUNK(gr, map));
+			grit_prep_item(gr, id, &item);
+			if(item.procMode == GRIT_EXPORT)
+				xp_array_gas(fout, item.name, item.pRec->data, rec_size(item.pRec), 
+					grit_type_size(item.dataType));					
 		}
 	}
 
-	sprintf(tag, "@}}BLOCK(%s)",gr->sym_name);
+	sprintf(tag, "@}}BLOCK(%s)",gr->symName);
 	fprintf(fout, "%s\n", tag);
 
 	// --- End grit-block ---
@@ -339,67 +468,47 @@ BOOL grit_xp_gas(GRIT_REC *gr)
 		fclose(fout);		// close files
 	}
 
-	return TRUE;
+	return true;
 }
 
 
-// ====================================================================
-// === EXPORT TO BIN ==================================================
+// --------------------------------------------------------------------
+// EXPORT TO BIN
+// --------------------------------------------------------------------
 
 
 //! Export to binary files
 /*!
 	\note Binary files cannot be appended, and are separate files.
 */
-BOOL grit_xp_bin(GRIT_REC *gr)
+bool grit_xp_bin(GritRec *gr)
 {
-	char name[MAXPATHLEN], str[MAXPATHLEN];
-	char *fmodes[]= {"a+b", "wb"}, *fmode;
+	lprintf(LOG_STATUS, "Export to binary files.\n");		
 
-	lprintf(LOG_STATUS, 
-"Export to binary files.\n");		
+	char fpath[MAXPATHLEN], str[MAXPATHLEN];
+	const char *fmode= gr->bAppend ? "a+b" : "wb";
+	const char *exts[4]= {"img.bin", "map.bin", "meta.bin", "pal.bin" };
 
-	path_repl_ext(str, gr->dst_path, NULL, MAXPATHLEN);
+	path_repl_ext(str, gr->dstPath, NULL, MAXPATHLEN);
 	
-	fmode= fmodes[gr->file_flags & GRIT_FILE_CAT ? 0 : 1];
-
-	if(gr->pal_flags & GRIT_INCL)
+	DataItem item;
+	for(eint id=GRIT_ITEM_GFX; id<GRIT_ITEM_MAX; id++)
 	{
-		sprintf(name, "%s.pal.bin", str);
-		xp_data_bin(name, gr->_pal_rec.data, rec_size(&gr->_pal_rec), 
-			fmode);
-	}
-
-	if(gr->img_flags & GRIT_INCL)
-	{
-		sprintf(name, "%s.img.bin", str);
-		xp_data_bin(name, gr->_img_rec.data, rec_size(&gr->_img_rec), 
-			fmode);
-	}
-
-	if(gr->map_flags & GRIT_INCL)
-	{
-		sprintf(name, "%s.map.bin", str);
-		xp_data_bin(name, gr->_map_rec.data, rec_size(&gr->_map_rec), 
-			fmode);
-
-		if(gr->meta_width*gr->meta_height > 1)
+		grit_prep_item(gr, id, &item);
+		if(item.procMode == GRIT_EXPORT)
 		{
-			sprintf(name, "%s.meta.bin", str);
-			xp_data_bin(name, gr->_meta_rec.data, rec_size(&gr->_meta_rec), 
-				fmode);
+			path_repl_ext(fpath, str, exts[id], MAXPATHLEN);
+			xp_data_bin(fpath, item.pRec->data, rec_size(item.pRec), fmode);
 		}
 	}
-	return TRUE;
+
+	return true;
 }
 
 
-// ====================================================================
-// === EXPORT TO GBFS =================================================
-
-int gbfs_namecmp(const void *a, const void *b);
-int grit_gbfs_entry_init(GBFS_ENTRY *gben, const RECORD *rec, 
-	const char *basename, int affix);
+// --------------------------------------------------------------------
+// EXPORT TO GBFS
+// --------------------------------------------------------------------
 
 //! Export to GBFS file
 /*! The 'append' mode for this function is special. Yes, it adds 
@@ -410,7 +519,7 @@ int grit_gbfs_entry_init(GBFS_ENTRY *gben, const RECORD *rec,
 	though.
 	\todo	Code is inconsistent with the C/asm exporters. Rectify.
 */
-BOOL grit_xp_gbfs(GRIT_REC *gr)
+bool grit_xp_gbfs(GritRec *gr)
 {
 	int ii, jj;
 
@@ -423,35 +532,38 @@ BOOL grit_xp_gbfs(GRIT_REC *gr)
 	int gb_count;
 	GBFS_ENTRY *gbenL= gr_gben, *gbenD= NULL;
 
-	ii=0;
-	// --- register the various fields ---
-	// palette
-	if(gr->pal_flags & GRIT_INCL)
-	{
-		grit_gbfs_entry_init(&gr_gben[ii], &gr->_pal_rec, 
-			gr->sym_name, E_PAL);
-		gr_data[ii++]= gr->_pal_rec.data;
-	}
-	// image
-	if(gr->img_flags & GRIT_INCL)
-	{
-		grit_gbfs_entry_init(&gr_gben[ii], &gr->_img_rec, 
-			gr->sym_name, (GRIT_IS_BMP(gr) ? E_BM : E_TILE));
-		gr_data[ii++]= gr->_img_rec.data;
-	}
-	// map
-	if(gr->map_flags & GRIT_INCL)
-	{
-		grit_gbfs_entry_init(&gr_gben[ii], &gr->_map_rec, 
-			gr->sym_name, E_MAP);
-		gr_data[ii++]= gr->_map_rec.data;
+	ii= 0;
 
-		// meta map
-		if(gr->meta_width*gr->meta_height > 1)
+	// --- register the various fields ---
+	// Palette
+	if(gr->palProcMode == GRIT_EXPORT)
+	{
+		grit_gbfs_entry_init(&gr_gben[ii], &gr->_palRec, 
+			gr->symName, E_PAL);
+		gr_data[ii++]= gr->_palRec.data;
+	}
+
+	// Graphics
+	if(gr->gfxProcMode == GRIT_EXPORT)
+	{
+		grit_gbfs_entry_init(&gr_gben[ii], &gr->_gfxRec, 
+			gr->symName, (grit_is_bmp(gr) ? E_BM : E_TILE));
+		gr_data[ii++]= gr->_gfxRec.data;
+	}
+
+	// Map
+	if(gr->mapProcMode == GRIT_EXPORT)
+	{
+		grit_gbfs_entry_init(&gr_gben[ii], &gr->_mapRec, 
+			gr->symName, E_MAP);
+		gr_data[ii++]= gr->_mapRec.data;
+
+		// Meta map
+		if(grit_is_metatiled(gr))
 		{
-			grit_gbfs_entry_init(&gr_gben[ii], &gr->_meta_rec, 
-				gr->sym_name, E_META);
-			gr_data[ii++]= gr->_meta_rec.data;
+			grit_gbfs_entry_init(&gr_gben[ii], &gr->_metaRec, 
+				gr->symName, E_META);
+			gr_data[ii++]= gr->_metaRec.data;
 		}
 	}
 	gb_count= gr_count= ii;
@@ -463,23 +575,23 @@ BOOL grit_xp_gbfs(GRIT_REC *gr)
 	gbhdr.dir_off= GBFL_SIZE;
 
 	char name[MAXPATHLEN];
-	strcpy(name, gr->dst_path);
+	strcpy(name, gr->dstPath);
 	path_fix_sep(name);
 
-	lprintf(LOG_STATUS, 
-"Export to GBFS: %s into %s .\n", gr->sym_name, name);		
+	lprintf(LOG_STATUS, "Export to GBFS: %s into %s .\n", 
+		gr->symName, name);
 
 
 	FILE *fout= fopen("gbfs.tmp", "wb");
 	if(fout == NULL)
-		return FALSE;
+		return false;
 
 	u32 fpos= GBFL_SIZE + gr_count*GBEN_SIZE;
 	fseek(fout, fpos, SEEK_SET);	// skip directory
 
 	// Insert mode
 	// Replace old with same name; insert new
-	if(gr->file_flags & GRIT_FILE_CAT)
+	if(gr->bAppend)
 	{
 		FILE *fin= fopen(name, "rb");
 		do
@@ -600,7 +712,7 @@ BOOL grit_xp_gbfs(GRIT_REC *gr)
 	remove(name);
 	rename("gbfs.tmp", name);
 
-	return TRUE;
+	return true;
 }
 
 // for qsort
@@ -631,29 +743,209 @@ int grit_gbfs_entry_init(GBFS_ENTRY *gben, const RECORD *rec,
 	strcat(name, cAffix[affix]);
 
 	strncpy(gben->name, name, 24);
-	gben->len= rec_size(rec);
+	gben->len= ALIGN4(rec_size(rec));
 	gben->data_offset= 0;
 
 	return 1;
 }
 
 
-// ====================================================================
-// === EXPORT TO ELF ==================================================
+// --------------------------------------------------------------------
+// EXPORT TO GRF
+// --------------------------------------------------------------------
+
+
+//! Create a RIFF chunk.
+chunk_t *chunk_create(const char *id, const RECORD *rec)
+{
+	return chunk_create(id, rec->data, rec_size(rec));
+}
+
+//! Create a RIFF chunk
+/*!
+	\note PONDER: Is ckSize always 4-aligned or just the chunk?
+*/
+chunk_t *chunk_create(const char *id, const void *data, uint size)
+{
+	uint ii;
+
+	size= ALIGN4(size);
+	chunk_t *chunk= (chunk_t*)malloc(size+8);
+
+	for(ii=0; ii<4; ii++)
+		chunk->id[ii]= id[ii];
+
+	chunk->size= size;	
+	memcpy(&chunk->data, data, size);
+
+	return chunk;
+}
+
+
+//! Merge multiple chunks into a single large one.
+/*!	\param id		Parent name.
+	\param cklist	Array of child-chunks to merge.
+	\param count	Length of \a cklist.
+	\param groupID	Group identifier for parent ("RIFF", "LIST", etc.).
+		Can be NULL.
+	\return	Merged chunks with under the name of \a id.
+*/
+chunk_t *chunk_merge(const char *id, chunk_t *cklist[], uint count, const char *groupID)
+{
+	uint ii;
+	uint size= 0;
+
+	for(ii=0; ii<count; ii++)
+		if(cklist[ii] != NULL)
+			size += cklist[ii]->size+8;
+
+	chunk_t *chunk;
+	u8 *dst;
+
+	// Split creation into with or without group id.
+	if(groupID)
+	{
+		chunk= (chunk_t*)malloc(size+16);
+		chunk_t *sub= (chunk_t*)chunk->data;
+
+		for(ii=0; ii<4; ii++)
+		{
+			chunk->id[ii]= groupID[ii];
+			sub->id[ii]= id[ii];
+		}
+
+		chunk->size= size+8;
+		sub->size= size;
+		dst= sub->data;
+	}
+	else
+	{
+		chunk= (chunk_t*)malloc(size+8);	
+		for(ii=0; ii<4; ii++)
+			chunk->id[ii]= id[ii];
+		chunk->size= size;
+		dst= chunk->data;
+	}
+
+
+	for(ii=0; ii<count; ii++)
+	{
+		if(cklist[ii] != NULL)
+		{
+			size= cklist[ii]->size+8;
+			memcpy(dst, cklist[ii], size);
+			dst += size;
+		}
+	}
+
+	return chunk;
+	
+}
+
+//! Free a RIFF chunk
+void chunk_free(chunk_t *chunk)
+{
+	free(chunk);
+}
+
+chunk_t *grit_prep_grf(GritRec *gr)
+{
+	GrfHeader hdr;
+	chunk_t *cklist[5]=  { NULL };
+
+	// Semi-constant data.
+	const char *ckIDs[4]= { "GFX ", "MAP ", "MMAP", "PAL " };
+	uint bpps[4]= { gr->gfxBpp, 16, 16, 16 };
+	if(gr->mapLayout == GRIT_MAP_AFFINE)
+		bpps[GRIT_ITEM_MAP]= 8;
+
+	memset(&hdr, 0, sizeof(hdr));
+
+	//# PONDER: what should the sizes represent?
+	hdr.gfxWidth= gr->areaRight - gr->areaLeft;			
+	hdr.gfxHeight= gr->areaBottom - gr->areaTop;
+
+	hdr.tileWidth = gr->tileWidth;
+	hdr.tileHeight= gr->tileHeight;
+
+	if(grit_is_metatiled(gr))
+	{
+		hdr.metaWidth= gr->metaWidth;
+		hdr.metaHeight= gr->metaHeight;
+	}
+
+	DataItem item;
+	for(eint id=GRIT_ITEM_GFX; id<GRIT_ITEM_MAX; id++)
+	{
+		grit_prep_item(gr, id, &item);
+		if(item.procMode == GRIT_EXPORT)
+		{
+			hdr.attrs[id]= bpps[id];
+			cklist[id+1]= chunk_create(ckIDs[id], item.pRec);
+		}
+	}
+
+	// Create header chunk and merge
+	cklist[0]= chunk_create("HDR ", &hdr, sizeof(GrfHeader));
+	chunk_t *chunk= chunk_merge("GRF ", cklist, 5, "RIFF");
+
+	for(int ii=0; ii<5; ii++)
+		chunk_free(cklist[ii]);	
+
+	return chunk;
+}
+
+//! Export to GRF : Grit RIFF
+/*!
+	\note	No append mode just yet.
+*/
+bool grit_xp_grf(GritRec *gr)
+{	
+	lprintf(LOG_STATUS, "Export to GRF: %s into %s .\n", 
+		gr->symName, gr->dstPath);
+	if(gr->bAppend)
+		lprintf(LOG_WARNING, "  No append mode for GRF yet.\n");
+
+	FILE *fout= fopen(gr->dstPath, "wb");
+
+	chunk_t *chunk= grit_prep_grf(gr);
+	u32 size= chunk->size+8;
+
+	// --- Write to file --- 
+
+	//fwrite("RIFF", 1, 4, fout);
+	//fwrite(&size, 4, 1, fout);
+	fwrite(chunk, 1, size, fout);
+
+	// --- Clean up ---
+	chunk_free(chunk);
+
+	fclose(fout);
+
+	return true;
+}
+
+
+// --------------------------------------------------------------------
+// EXPORT TO ELF
+// --------------------------------------------------------------------
+
 
 //! Export to GNU object file
 /*!
 	\note Non-functional. For future use
 */
-BOOL grit_xp_o(GRIT_REC *gr)
+bool grit_xp_o(GritRec *gr)
 {
-	return TRUE;
+	return true;
 }
 
 
 //! Export a single array to GNU object file (for future use)
-BOOL xp_array_o(FILE *fp, const char *varname, 
+bool xp_array_o(FILE *fp, const char *varname, 
 	const BYTE *data, int len, int chunk);
+
+
 
 // ====================================================================
 // === HELPERS ========================================================
@@ -675,12 +967,27 @@ BOOL xp_array_o(FILE *fp, const char *varname,
 		extern const unsigned short fooMap[128];</code><br>
 		[/code]
 */
-void grit_xp_decl(FILE *fp, int chunk, const char *name, int affix, int len)
+void grit_xp_decl(FILE *fp, int dtype, const char *name, int affix, int len)
 {
 	fprintf(fp, "#define %s%sLen %d\n", name, cAffix[affix], len);
-	fprintf(fp, "%s %s %s%s[%d];\n\n", cTypeSpec, cCTypes[chunk], 
-		name, cAffix[affix], (len+chunk-1)/chunk);
+	fprintf(fp, "%s %s %s%s[%d];\n\n", cTypeSpec, cCTypes[dtype], 
+		name, cAffix[affix],  ALIGN4(len)/dtype);
 }
+
+void grit_xp_decl(FILE *fp, DataItem *item)
+{
+	if(item == NULL || item->pRec == NULL)
+		return;
+
+	uint size= rec_size(item->pRec);
+	uint dtype= grit_type_size(item->dataType);
+	uint count= ALIGN4(size)/dtype;
+
+	fprintf(fp, "#define %sLen %d\n", item->name, size);
+	fprintf(fp, "%s %s %s[%d];\n\n", cTypeSpec, cCTypes[dtype], 
+		item->name, count);
+}
+
 
 //! Creates header file with the declaration list
 /*
@@ -688,30 +995,30 @@ void grit_xp_decl(FILE *fp, int chunk, const char *name, int affix, int len)
 		actual data in it. Data in headers is bad, so don't have 
 		data in headers, mkay? Mkay!
 */
-BOOL grit_xp_h(GRIT_REC *gr)
+bool grit_xp_h(GritRec *gr)
 {
 	char str[MAXPATHLEN];
 	char tag[MAXPATHLEN], fpath[MAXPATHLEN], tmppath[MAXPATHLEN];
 	long pos= -1;
 	FILE *fin, *fout;
-	BOOL bAppend= gr->file_flags & GRIT_FILE_CAT;
+	bool bAppend= gr->bAppend;
 
 	// Prep begin tag
-	sprintf(tag, "//{{BLOCK(%s)",gr->sym_name);
+	sprintf(tag, "//{{BLOCK(%s)",gr->symName);
 
 	// Open 'output' file
-	path_repl_ext(fpath, gr->dst_path, "h", MAXPATHLEN);
+	path_repl_ext(fpath, gr->dstPath, "h", MAXPATHLEN);
 
 	// File doesn't exist -> write-mode only
 	if(!file_exists(fpath))
-		bAppend=FALSE;
+		bAppend=false;
 
 	if(bAppend)
 	{
 		// Open temp and input file
 		tmpnam(tmppath);
 		if( (fout=fopen(tmppath, "w")) == NULL)
-			return FALSE;
+			return false;
 
 		fin= fopen(fpath, "r");
 		pos= file_find_tag(fout, fin, tag);
@@ -730,38 +1037,33 @@ BOOL grit_xp_h(GRIT_REC *gr)
 	grit_preface(gr, fout, "//");
 
 	// include guards
-	strcpy(str, gr->sym_name);
+	strcpy(str, gr->symName);
 	strupr(str);
 	fprintf(fout, "#ifndef __%s__\n#define __%s__\n\n", str, str);
 
-	// Palette comments
-	if(gr->pal_flags & GRIT_INCL)
-		grit_xp_decl(fout, GRIT_CHUNK(gr,pal), gr->sym_name, E_PAL, 
-			rec_size(&gr->_pal_rec));
 
-	// bitmap/tileset comments
-	if(gr->img_flags &	GRIT_INCL)
-		grit_xp_decl(fout, GRIT_CHUNK(gr,img), gr->sym_name, 
-			(GRIT_IS_BMP(gr) ? E_BM : E_TILE), 
-			rec_size(&gr->_img_rec));
-
-	// (meta-)map comments
-	if(gr->map_flags & GRIT_INCL)
+	if(gr->bRiff)	// Single GRF item
 	{
-		int chunk= GRIT_CHUNK(gr,map);
-		grit_xp_decl(fout, chunk, gr->sym_name, E_MAP, 
-			rec_size(&gr->_map_rec));
-
-		if(gr->meta_width*gr->meta_height != 1)
-			grit_xp_decl(fout, chunk, gr->sym_name, E_META, rec_size(&gr->_meta_rec));
+		grit_xp_decl(fout, grit_type_size(gr->gfxDataType), 
+			gr->symName, E_GRF, grit_xp_size(gr));
+	}
+	else			// Separate items
+	{
+		DataItem item;
+		for(eint id=GRIT_ITEM_GFX; id<GRIT_ITEM_MAX; id++)
+		{
+			grit_prep_item(gr, id, &item);
+			if(item.procMode == GRIT_EXPORT)
+			grit_xp_decl(fout, &item);
+		}
 	}
 
 	// include guards again
-	strcpy(str, gr->sym_name);
+	strcpy(str, gr->symName);
 	strupr(str);
 	fprintf(fout, "#endif // __%s__\n\n", str);
 
-	sprintf(tag, "//}}BLOCK(%s)",gr->sym_name);
+	sprintf(tag, "//}}BLOCK(%s)",gr->symName);
 	fprintf(fout, "%s\n", tag);
 
 	// --- End grit-block ---
@@ -784,7 +1086,7 @@ BOOL grit_xp_h(GRIT_REC *gr)
 		fclose(fout);
 	}
 
-	return TRUE;
+	return true;
 }
 
 //! Creates data preface, containing a data description
@@ -797,137 +1099,131 @@ BOOL grit_xp_h(GRIT_REC *gr)
 	\param fp	FILE pointer
 	\param cmt	Comment symbol string (like &ldquo;//&rdquo; for C)
 */
-BOOL grit_preface(GRIT_REC *gr, FILE *fp, const char *cmt)
+bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 {
 	int tmp, size=0;
-	u32 flags;
 	int aw, ah, mw, mh;
 	char hline[80], str2[16]="", str[96]="";
 
 	time_t aclock;
 	struct tm *newtime;
 
-	// ASSERT(fp)
-
 	memset(hline, '=', 72);
 	hline[72]= '\n';
 	hline[73]= '\0';
 	memcpy(hline, cmt, strlen(cmt));
 
-	aw= gr->area_right-gr->area_left;
-	ah= gr->area_bottom-gr->area_top;
-	mw= gr->meta_width;
-	mh= gr->meta_height;
+	aw= gr->areaRight  - gr->areaLeft;
+	ah= gr->areaBottom - gr->areaTop;
+	mw= gr->metaWidth;
+	mh= gr->metaHeight;
 
 	fprintf(fp, "%s%s\n", hline, cmt);
-	fprintf(fp, "%s\t%s, %dx%d@%d, \n", cmt, gr->sym_name, 
-		aw, ah, gr->img_bpp);
+	fprintf(fp, "%s\t%s, %dx%d@%d, \n", cmt, gr->symName, 
+		aw, ah, gr->gfxBpp);
 
 	// Transparency options
-	if(gr->img_flags & GRIT_IMG_TRANS)
+	if(gr->gfxHasAlpha)
 	{
-		RGBQUAD *rgb= &gr->img_trans;
+		RGBQUAD *rgb= &gr->gfxAlphaColor;
 		fprintf(fp, "%s\tTransparent color : %02X,%02X,%02X\n", cmt, 
-			rgb->rgbRed, rgb->rgbBlue, rgb->rgbBlue);
+			rgb->rgbRed, rgb->rgbGreen, rgb->rgbBlue);
 	}
-	else if(gr->img_flags & GRIT_IMG_BMP_A)
+	else if(gr->gfxMode == GRIT_GFX_BMP_A)
 	{
 		fprintf(fp, "%s\tAlphabit on.\n", cmt);
 	}
-	else if(gr->pal_flags & GRIT_PAL_TRANS)
+	else if(gr->palHasAlpha)
 	{
-		fprintf(fp, "%s\tTransperent palette entry: %d.\n", cmt, gr->pal_trans);
+		fprintf(fp, "%s\tTransparent palette entry: %d.\n", cmt, gr->palAlphaId);
 	}
 
-
 	// Palette comments
-	flags= gr->pal_flags;
-	if(flags & GRIT_INCL)
+	if(gr->palProcMode == GRIT_EXPORT)
 	{
-		tmp= rec_size(&gr->_pal_rec);
+		tmp= rec_size(&gr->_palRec);
 		fprintf(fp, "%s\t+ palette %d entries, ", cmt, tmp/2);
 
-		fprintf(fp, "%s compressed\n", cCprs[BF_GET(flags,GRIT_CPRS)]);
+		fprintf(fp, "%s compressed\n", cCprs[gr->palCompression]);
 		
 		sprintf(str2, "%d + ", tmp);
 		strcat(str, str2);
 		size += tmp;
 	}
 
-	// bitmap/tileset comments
-	flags= gr->img_flags;
-	if(flags &	GRIT_INCL)
+	// Bitmap/tileset comments
+	if(gr->gfxProcMode == GRIT_EXPORT)
 	{
 		fprintf(fp, "%s\t+ ", cmt);
-		if(flags & GRIT_IMG_BMP)
+		switch(gr->gfxMode)
 		{
-			fputs("bitmap ", fp);
-		}
-		else
-		{
-			tmp= dib_get_width(gr->_dib)*
-				dib_get_height(gr->_dib)/64;
+		case GRIT_GFX_TILE:
+			tmp= dib_get_width(gr->_dib)*dib_get_height(gr->_dib)/64;
 			fprintf(fp, "%d tiles ", tmp);
-			u32 mflags= gr->map_flags;
-			if( (mflags&(GRIT_RDX_ON|GRIT_INCL)) == (GRIT_RDX_ON|GRIT_INCL) )
+
+			if(gr->mapProcMode != GRIT_EXCLUDE && gr->mapRedux != 0)
 			{
 				// TODO: blank flag
 				fputs("(t", fp);
-				if(mflags & GRIT_RDX_FLIP)
+				if(gr->mapRedux & GRIT_RDX_FLIP)
 					fputs("|f", fp);
-				if(mflags & GRIT_RDX_PAL)
+				if(gr->mapRedux & GRIT_RDX_PAL)
 					fputs("|p", fp);
 				fputs(" reduced) ", fp);
 			}
-			// if map is printed as well, put meta cmt there
-			if(mw*mh != 1 && (~mflags&GRIT_INCL))
-				fprintf(fp, "%dx%d metatiles ", mw, mh);
-		}
-		fprintf(fp, "%s compressed\n", 
-			cCprs[BF_GET(flags, GRIT_CPRS)]);
 
-		tmp= rec_size(&gr->_img_rec);
+			// If map is printed as well, put meta cmt there
+			if(gr->mapProcMode != GRIT_EXPORT && mw*mh > 1)
+				fprintf(fp, "%dx%d metatiles ", mw, mh);
+			break;
+
+		case GRIT_GFX_BMP:
+		case GRIT_GFX_BMP_A:
+			fputs("bitmap ", fp);						
+			break;
+		}
+
+		fprintf(fp, "%s compressed\n", cCprs[gr->gfxCompression]);
+
+		tmp= rec_size(&gr->_gfxRec);
 		sprintf(str2, "%d + ", tmp);
 		strcat(str, str2);
 		size += tmp;
 	}
 
 	// (meta-)map comments
-	flags= gr->map_flags;
-	if(flags & GRIT_INCL)
+	if(gr->mapProcMode == GRIT_EXPORT)
 	{
 		fprintf(fp, "%s\t+ ", cmt);
-		switch(flags & GRIT_MAP_LAY_MASK)
+		switch(gr->mapLayout)
 		{
 		case GRIT_MAP_FLAT:
 			fputs("regular map (flat), ", fp);		break;
 		case GRIT_MAP_REG:
 			fputs("regular map (in SBBs), ", fp);	break;
-		case GRIT_MAP_AFF:
+		case GRIT_MAP_AFFINE:
 			fputs("affine map, ", fp);				break;
 		}
 
-		fprintf(fp, "%s compressed, ", 
-			cCprs[BF_GET(flags,GRIT_CPRS)]);
+		fprintf(fp, "%s compressed, ", cCprs[gr->mapCompression]);
 		
-		tmp= rec_size(&gr->_map_rec);
+		tmp= rec_size(&gr->_mapRec);
 		sprintf(str2, "%d + ", tmp);
 		strcat(str, str2);
 		size += tmp;
 
-
 		fprintf(fp, "%dx%d \n", aw/mw/8, ah/mh/8);
-		if(gr->meta_width*gr->meta_height != 1)
+		if(grit_is_metatiled(gr))
 		{
 			fprintf(fp, "%s\t%dx%d metatiles\n", cmt, mw, mh);
-			tmp= rec_size(&gr->_meta_rec);
+			tmp= rec_size(&gr->_metaRec);
 			sprintf(str2, "%d + ", tmp);
 			strcat(str, str2);
 			size += tmp;
 		}
-		if(gr->img_flags & GRIT_IMG_SHARED)
+		if(gr->gfxIsShared)
 			fprintf(fp, "%s\tExternal tile file: %s.\n", cmt, 
-				gr->shared->path);
+				gr->shared->tilePath);
 	}
 	
 	tmp= strlen(str);
@@ -950,12 +1246,12 @@ BOOL grit_preface(GRIT_REC *gr, FILE *fp, const char *cmt)
 		fwrite(prev, curr+1-prev, 1, fp);
 		prev= curr+1;
 	}
+
 	fprintf(fp, "%s%s\n", cmt, prev);
-	//fprintf(fp, "%s\tExported by Cearn's GBA Image Transmogrifier\n", cmt);
-	//fprintf(fp, "%s\t( http://www.coranac.com )\n", cmt);
 	fprintf(fp, "%s\n%s\n", cmt, hline);
 
-	return TRUE;
+	return true;
 }
+
 
 // EOF

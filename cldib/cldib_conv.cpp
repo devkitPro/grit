@@ -49,12 +49,11 @@ RGBQUAD str2rgb(const char *str)
 
 // === DIB FUNCTIONS ==================================================
 
-
 //! Hub for bpp conversion (all <code>-\></code> all; CPY; ok).
 /*!	\param src Source bitmap.
-*	\param dstB Destination bitdepth (all)
-*	\param base Bit(un)pack offset. 
-*	\return Converted bitmap on success; \c NULL on failure
+	\param dstB Destination bitdepth (all)
+	\param base Bit(un)pack offset. 
+	\return Converted bitmap on success; \c NULL on failure
 */
 // PONDER: have flags for RGB/BGR and stuff? (Or does that belong to 
 // data?)
@@ -89,7 +88,12 @@ CLDIB *dib_convert(CLDIB *src, int dstB, DWORD base)
 	else if(srcB > 8 && dstB <= 8)
 	{
 		CLDIB *tmp= NULL, *dst= NULL;
-		tmp= dib_true_to_8(src, 1<<dstB);
+
+		DWORD nclrs= 1<<dstB;
+		if(base != 0 && base<nclrs)
+			nclrs= base;
+		
+		tmp= dib_true_to_8(src, nclrs);
 		if(tmp == NULL)
 			return NULL;
 		if(dstB == 8)
@@ -329,8 +333,8 @@ BOOL data_bit_unpack(void *dstv, const void *srcv,
 	DWORD srcMask= (~0u)>>(32-srcB);	// src mask
 	DWORD srcBuf, dstBuf, tmp;			// buffers
 	int srcShift, dstShift;				// current pos in u32
-	int dstN= dstB*srcS*8/srcB;	// # dst bits
-	dstN= (dstN+31)/32;			// # dst u32s
+	int dstN= dstB*srcS*8/srcB;			// # dst bits
+	dstN= (dstN+31)/32;					// # dst u32s
 
 	BOOL bBase0= (base&BUP_BASE0) != 0;
 	DWORD srcEndMask= ((base&BUP_BEBIT) && srcB<8) ? 8-srcB : 0;
@@ -622,7 +626,7 @@ BOOL data_true_to_true(void *dstv, const void *srcv, int srcS,
 				tmp= srcD2[ii];
 				dstD3[ii].rgbtBlue=  (BYTE)(( tmp     &31)*255/31);
 				dstD3[ii].rgbtGreen= (BYTE)(((tmp>> 5)&31)*255/31);
-				dstD3[ii].rgbtRed=   (BYTE)(((tmp<<10)&31)*255/31);
+				dstD3[ii].rgbtRed=   (BYTE)(((tmp>>10)&31)*255/31);
 			}
 		}
 		else			// 32->24
@@ -648,7 +652,7 @@ BOOL data_true_to_true(void *dstv, const void *srcv, int srcS,
 				tmp= srcD2[ii];
 				dstD4[ii].rgbBlue=  (BYTE)(( tmp     &31)*255/31);
 				dstD4[ii].rgbGreen= (BYTE)(((tmp>> 5)&31)*255/31);
-				dstD4[ii].rgbRed=   (BYTE)(((tmp<<10)&31)*255/31);
+				dstD4[ii].rgbRed=   (BYTE)(((tmp>>10)&31)*255/31);
 				dstD4[ii].rgbReserved= 0xFF;
 			}
 		}

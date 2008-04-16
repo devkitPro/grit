@@ -1,23 +1,20 @@
 //
 //! \file grit_misc.cpp
 //!   Various routines
-//! \date 20050814 - 20050903
+//! \date 20050814 - 20080111
 //! \author  cearn
 //
-// === NOTES === 
+/* === NOTES === 
+  * 20080111, JV. Name changes, part 1
+*/
 
 #include "grit.h"
 
+#include "cprs.h"
 
 // --------------------------------------------------------------------
 // PROTOTYPES
 // --------------------------------------------------------------------
-
-
-int cprs_gba_lz77(RECORD *dst, const RECORD *src);
-int cprs_gba_huff(RECORD *dst, const RECORD *src, int srcB);
-int cprs_gba_rle8(RECORD *dst, const RECORD *src);
-
 
 // --------------------------------------------------------------------
 // FUNCTIONS
@@ -28,36 +25,44 @@ int cprs_gba_rle8(RECORD *dst, const RECORD *src);
 /*!
 	\param dst. Record to compress too
 	\param src. Record to compress
-	\param flags. Compression type
+	\param mode. Compression type
 	\note Aliasing \a dst and \a src is safe.
 */
-BOOL grit_compress(RECORD *dst, const RECORD *src, u32 flags)
+bool grit_compress(RECORD *dst, const RECORD *src, uint mode)
 {
-	// ASSERT(dst);
-	// ASSERT(src);
+	if(dst==NULL || src==NULL)
+		return false;
 
 	RECORD cprsRec= { 0, 0, NULL };
 
-	switch(flags & GRIT_CPRS_MASK)
+
+	if(mode == GRIT_CPRS_OFF)
 	{
-	case GRIT_CPRS_LZ77:
-		cprs_gba_lz77(&cprsRec, src);
-		break;
-	case GRIT_CPRS_HUFF:
-		// PONDER: what if it fails??
-		cprs_gba_huff(&cprsRec, src, 8);
-		break;
-	case GRIT_CPRS_RLE:
-		cprs_gba_rle8(&cprsRec, src);
-		break;
-	default:
-		return FALSE;
+		cprsRec= *src;
+		cprsRec.data= (u8*)malloc(ALIGN4(rec_size(src)));
+		memcpy(cprsRec.data, src->data, rec_size(src));
+
+		rec_alias(dst, &cprsRec);
+		return true;						
+	}
+	else if(mode < GRIT_CPRS_MAX)
+	{
+		const ECprsTag tags[5]= { CPRS_NONE_TAG, 
+			CPRS_LZ77_TAG, CPRS_HUFF8_TAG, CPRS_RLE_TAG, CPRS_NONE_TAG 
+		};
+
+		lprintf(LOG_STATUS, "Compressing: %02x\n", mode, tags[mode]);
+
+		if(cprs_compress(&cprsRec, src, tags[mode]) != 0)
+		{
+			rec_alias(dst, &cprsRec);
+			return true;
+		}		
 	}
 
-	if(cprsRec.data)
-		rec_alias(dst, &cprsRec);
+	lprintf(LOG_WARNING, "  Compression failed\n");
 
-	return TRUE;
+	return false;
 }
 
 // EOF

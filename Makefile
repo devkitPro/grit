@@ -1,7 +1,8 @@
-GRIT_VERSION	:=	0.7.2
-GRIT_BUILD	:=	20070331
+GRIT_VERSION	:=	0.8
+GRIT_BUILD		:=	20080304
 
-CPPFLAGS	:=	-g -DGRIT_VERSION=\"$(GRIT_VERSION)\" -DGRIT_BUILD=\"$(GRIT_BUILD)\" -O3 -Icldib -Ilibgit
+CPPFLAGS	:=	-g -O3 -Icldib -Ilibgit
+CPPFLAGS	+=	-DGRIT_VERSION=\"$(GRIT_VERSION)\" -DGRIT_BUILD=\"$(GRIT_BUILD)\"
 LDFLAGS		:=	-g
 
 # ---------------------------------------------------------------------
@@ -10,31 +11,33 @@ LDFLAGS		:=	-g
 
 UNAME	:=	$(shell uname -s)
 
+PREFIX	?=	$(DEVKITARM)/bin
+
 ifneq (,$(findstring MINGW,$(UNAME)))
-	EXEEXT := .exe
+	OS	:=	win32
+	EXEEXT		:=	.exe
 	EXTRAINSTALL := extlib/FreeImage.dll
-	EXTRATAR := -C extlib FreeImage.dll
-	OS := win32
+	EXTRATAR 	:=	-C extlib FreeImage.dll
 endif
 
 ifneq (,$(findstring CYGWIN,$(UNAME)))
+	OS	:= win32
 	CPPFLAGS	+= -mno-cygwin
 	LDFLAGS		+= -mno-cygwin
 	EXEEXT		:= .exe
 	EXTRAINSTALL := extlib/FreeImage.dll
-	EXTRATAR := -C extlib FreeImage.dll
-	OS := win32
+	EXTRATAR	:= -C extlib FreeImage.dll
 endif
 
 ifneq (,$(findstring Darwin,$(UNAME)))
-	OS := OSX
+	OS	:=	OSX
 else
 	LDFLAGS += -s
 endif
 
 ifneq (,$(findstring Linux,$(UNAME)))
+	OS	:=	Linux
 	LDFLAGS += -static
-	OS := Linux
 endif
 
 TARGET	:=	grit$(EXEEXT)
@@ -48,11 +51,12 @@ TARGET	:=	grit$(EXEEXT)
 CLDIB_DIR	:=	cldib
 LIBCLDIB	:=	libcldib.a
 
-LIBCLDIB_SRC	:=	cldib_adjust.cpp	\
-			cldib_conv.cpp	\
-			cldib_tmap.cpp	\
-			cldib_core.cpp	\
-			cldib_tools.cpp	\
+LIBCLDIB_SRC	:=				\
+			cldib_adjust.cpp	\
+			cldib_conv.cpp		\
+			cldib_core.cpp		\
+			cldib_tmap.cpp		\
+			cldib_tools.cpp		\
 			cldib_wu.cpp
 
 LIBCLDIB_OBJ	:=	$(addprefix build/, $(LIBCLDIB_SRC:.cpp=.o))
@@ -62,15 +66,17 @@ LIBCLDIB_OBJ	:=	$(addprefix build/, $(LIBCLDIB_SRC:.cpp=.o))
 LIBGRIT_DIR	:=	libgrit
 LIBGRIT		:=	libgrit.a
 
-LIBGRIT_SRC	:=	grit_core.cpp	\
-			grit_huff.cpp	\
-			grit_lz.cpp	\
+LIBGRIT_SRC	:=				\
+			cprs.cpp		\
+			cprs_huff.cpp	\
+			cprs_lz.cpp		\
+			cprs_rle.cpp	\
+			grit_core.cpp	\
 			grit_misc.cpp	\
 			grit_prep.cpp	\
-			grit_rle.cpp	\
 			grit_shared.cpp	\
-			grit_xp.cpp	\
-			logger.cpp	\
+			grit_xp.cpp		\
+			logger.cpp		\
 			pathfun.cpp
 
 LIBGRIT_OBJ	:=	$(addprefix build/, $(LIBGRIT_SRC:.cpp=.o))
@@ -91,7 +97,7 @@ DEPENDS		:=	$(GRIT_OBJ:.o=.d) $(LIBCLDIB_OBJ:.o=.d) $(LIBGRIT_OBJ:.o=.d)
 
 SRCDIRS	:= $(CLDIB_DIR) $(LIBGRIT_DIR) $(GRIT_DIR) $(EXTLIB_DIR)
 INCDIRS	:= $(CLDIB_DIR) $(LIBGRIT_DIR) $(EXTLIB_DIR)
-LIBDIRS	:= .
+LIBDIRS	:= . $(EXTLIB_DIR)
 
 INCLUDE		:= $(foreach dir, $(INCDIRS), -I$(dir))
 LIBPATHS	:= $(foreach dir, $(LIBDIRS), -L$(dir))
@@ -113,9 +119,9 @@ build/grit_main.o : Makefile
 
 $(LIBCLDIB)	:	$(LIBCLDIB_OBJ)
 
-$(LIBGRIT)	:	$(LIBCLDIB) $(LIBGRIT_OBJ)
+$(LIBGRIT)	:	$(LIBGRIT_OBJ)
 
-$(TARGET)	:	$(LIBGRIT) $(GRIT_OBJ)
+$(TARGET)	:	$(LIBCLDIB) $(LIBGRIT) $(GRIT_OBJ)
 	$(CXX) $(LDFLAGS) -o $@ $(GRIT_OBJ) $(LIBPATHS) -lgrit -lcldib -lfreeimage
 
 

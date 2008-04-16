@@ -1,12 +1,14 @@
 //
 //! \file grit_core.cpp
 //!   Core grit routines
-//! \date 20050814 - 20070227
+//! \date 20050814 - 20080211
 //! \author cearn
 //
-// === NOTES === 
-// * 20070227, jv: logging functions.
-// * 20061010, jv: '-fa' now uses src for the sym-name if none is given.
+/* === NOTES === 
+  * 20080111, jv. Name changes, part 1
+  * 20070227, jv: logging functions.
+  * 20061010, jv: '-fa' now uses src for the sym-name if none is given.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,13 +28,13 @@
 
 static const char __grit_app_string[]=
 "\tExported by Cearn's GBA Image Transmogrifier\n"
-"\t( http://www.coranac.com )";
+"\t( http://www.coranac.com/projects/#grit )";
 
 
-const char *cFileTypes[4]= {"c", "s", "bin", "gbfs" /*, "o"*/};
-const char *cAffix[5]= { "Pal", "Tiles", "Bitmap", "Map", "MetaMap" };
+const char *cFileTypes[GRIT_FTYPE_MAX]= {"c", "s", "bin", "gbfs", "grf" /*, "o"*/};
+const char *cAffix[6]= { "Pal", "Tiles", "Bitmap", "Map", "MetaMap", "Grf" };
 const char *cTypes[3]= { "u8", "u16", "u32" };
-const char *cCprs[4]= { "not", "lz77", "huf", "rle" };
+const char *cCprs[GRIT_CPRS_MAX]= { "not", "lz77", "huf", "rle", "fake" };
 
 
 // --------------------------------------------------------------------
@@ -49,31 +51,39 @@ const char *cCprs[4]= { "not", "lz77", "huf", "rle" };
 */
 const char *grit_app_string= __grit_app_string;
 
+// --------------------------------------------------------------------
+// PROTOTYPES
+// --------------------------------------------------------------------
+
+
+bool grit_validate_paths(GritRec *gr);
+bool grit_validate_area(GritRec *gr);
+
 
 // --------------------------------------------------------------------
 // FUNCTIONS
 // --------------------------------------------------------------------
 
-//! GRIT_REC 'Constructor'.
-GRIT_REC *grit_alloc()
+//! GritRec 'Constructor'.
+GritRec *grit_alloc()
 {
-	GRIT_REC *gr= (GRIT_REC*)malloc(sizeof(GRIT_REC));
+	GritRec *gr= (GritRec*)malloc(sizeof(GritRec));
 	if(gr == NULL)
 		return NULL;
 
-	GRIT_SHARED *grs= grs_alloc();
+	GritShared *grs= grs_alloc();
 	if(grs == NULL)
 	{	free(gr);	return NULL;	}
 
-	memset(gr, 0, sizeof(GRIT_REC));
+	memset(gr, 0, sizeof(GritRec));
 
 	gr->shared= grs;
 
 	return gr;
 }
 
-//! GRIT_REC 'Destructor'.
-void grit_free(GRIT_REC *gr)
+//! GritRec 'Destructor'.
+void grit_free(GritRec *gr)
 {
 	if(gr == NULL)
 		return;
@@ -85,98 +95,123 @@ void grit_free(GRIT_REC *gr)
 
 
 //! Initializes \a gr to default values.
-void grit_init(GRIT_REC *gr)
+void grit_init(GritRec *gr)
 {
 	if(gr == NULL)
 		return;
+	
+	// File/symbol options.
+	gr->fileType= GRIT_FTYPE_S;
+	gr->bHeader= true;
+	gr->bAppend= false;
+	gr->bExport= true;
+	gr->bRiff= false;
 
-	// file/var info
-	gr->file_flags= GRIT_FILE_S | GRIT_FILE_H;
+	// Area options (tl inclusive, rb exclusive).
+	gr->areaLeft= 0;
+	gr->areaTop= 0;
+	gr->areaRight= 0;	// mod later.
+	gr->areaBottom= 0;	// mod later.
 
-	// palette
-	gr->pal_flags= GRIT_INCL | GRIT_U16;
-	gr->pal_start= 0;
-	gr->pal_end= 256;
-	// image
-	gr->img_flags= GRIT_INCL | GRIT_U32 | GRIT_IMG_TILE;
-	gr->img_ofs= 0;
-	gr->img_bpp= 8;
-	// area (tl inclusive, rb exclusive)
-	gr->area_left=  0;
-	gr->area_top=   0;
-	gr->area_right= 8;	// mod later
-	gr->area_bottom=8;	// mod later
-	// map
-	gr->map_flags= GRIT_EXCL | GRIT_U16 | GRIT_MAP_FLAT | GRIT_RDX_REG8;
-	gr->map_ofs= 0;
-	gr->meta_width= 1;
-	gr->meta_height= 1;
+	// Graphics options.
+	gr->gfxProcMode= GRIT_EXPORT;
+	gr->gfxDataType= GRIT_U32;
+	gr->gfxCompression= GRIT_CPRS_OFF;
+	gr->gfxMode= GRIT_GFX_TILE;
+	gr->gfxHasAlpha= false;
+	gr->gfxAlphaColor= clr2rgb(RGB(255, 0, 255));
+	gr->gfxBpp= 8;
+	gr->gfxOffset= 0;
+	gr->gfxIsShared= false;
+
+	// Map options.
+	gr->mapProcMode= GRIT_EXCLUDE;
+	gr->mapDataType= GRIT_U16;
+	gr->mapCompression= GRIT_CPRS_OFF;
+	gr->mapRedux= GRIT_RDX_REG8;
+	gr->mapLayout= GRIT_MAP_FLAT;
+	gr->mapOffset= 0;
+
+	// Extra tile options
+	gr->tileWidth= 0;
+	gr->tileHeight= 0;
+	gr->metaWidth= 1;
+	gr->metaHeight= 1;
+
+	// Palette options
+	gr->palProcMode= GRIT_EXPORT;
+	gr->palDataType= GRIT_U16;
+	gr->palCompression= GRIT_CPRS_OFF;
+	gr->palHasAlpha= false;
+	gr->palAlphaId= 0;
+	gr->palStart= 0;
+	gr->palEnd= 256;
 
 	// NOTE: do NOT init shared here!
 }
 
 
 //! Frees allocations and zeroes everything (except shared).
-void grit_clear(GRIT_REC *gr)
+void grit_clear(GritRec *gr)
 {
 	if(gr == NULL)
 		return;
 
-	free(gr->src_path);
-	dib_free(gr->src_dib);
+	free(gr->srcPath);
+	dib_free(gr->srcDib);
 
-	free(gr->dst_path);
-	free(gr->sym_name);
+	free(gr->dstPath);
+	free(gr->symName);
 
 	// internals
 	dib_free(gr->_dib);
-	free(gr->_pal_rec.data);
-	free(gr->_img_rec.data);
-	free(gr->_map_rec.data);
-	free(gr->_meta_rec.data);
+	free(gr->_palRec.data);
+	free(gr->_gfxRec.data);
+	free(gr->_mapRec.data);
+	free(gr->_metaRec.data);
 
-	GRIT_SHARED *grs= gr->shared;
-	memset(gr, 0, sizeof(GRIT_REC));
+	GritShared *grs= gr->shared;
+	memset(gr, 0, sizeof(GritRec));
 	gr->shared= grs;
 }
 
 
 //! Initialize palette and gfx-related functions from the DIB.
-BOOL grit_init_from_dib(GRIT_REC *gr)
+bool grit_init_from_dib(GritRec *gr)
 {
 	if(gr == NULL)
-		return FALSE;
+		return false;
 
-	CLDIB *dib= gr->src_dib;
+	CLDIB *dib= gr->srcDib;
 	if(dib == NULL)
 	{
-		lprintf(LOG_ERROR, "No bitmap to initialize GRIT_REC from.\n");
-		return FALSE;
+		lprintf(LOG_ERROR, "No bitmap to initialize GritRec from.\n");
+		return false;
 	}
 
  	int nclrs = dib_get_nclrs(dib);
-	gr->pal_end= ( nclrs ? nclrs : 256 );
+	gr->palEnd= ( nclrs ? nclrs : 256 );
 
 	if(dib_get_bpp(dib) > 8)
-		gr->img_bpp= 16;
+		gr->gfxBpp= 16;
 	else
-		gr->img_bpp= dib_get_bpp(dib);
+		gr->gfxBpp= dib_get_bpp(dib);
 
-	gr->area_right= dib_get_width(dib);
-	gr->area_bottom=dib_get_height(dib);
+	gr->areaRight= dib_get_width(dib);
+	gr->areaBottom=dib_get_height(dib);
 
-	return TRUE;
+	return true;
 }
 
 //! Main grit hub.
 /*! After filling in a grit-rec, pass it to this function and you're 
 	pretty much done.
 	\param gr A filled (but not necessarily validated) grit-rec.
-	\return \c TRUE for success, \c FALSE for failure
+	\return \c true for success, \c false for failure
 	\todo Create a set of individual error messages for the various 
 	  stages.
 */
-BOOL grit_run(GRIT_REC *gr)
+bool grit_run(GritRec *gr)
 {
 	time_t aclock;
 	struct tm *newtime;
@@ -188,47 +223,54 @@ BOOL grit_run(GRIT_REC *gr)
 
 	lprintf(LOG_STATUS, str);
 
-	if(grit_validate(gr) == FALSE)
-		return FALSE;
+	if(grit_validate(gr) == false)
+		return false;
 		
-	if(grit_prep(gr) == FALSE)
-		return FALSE;
+	if(grit_prep(gr) == false)
+		return false;
 
-	if(~gr->file_flags & GRIT_FILE_NO_OUT)
-		if(grit_export(gr) == FALSE)
-			return FALSE;
+	if(gr->bExport)
+		if(grit_export(gr) == false)
+			return false;
 
 	lprintf(LOG_STATUS, "Run completed :).\n");
-	return TRUE;
+	return true;
 }
 
 
-void grit_dump(GRIT_REC *gr, FILE *fp)
+void grit_dump(GritRec *gr, FILE *fp)
 {
 	fprintf(fp, "%12s %s\n", "src path", 
-		isempty(gr->src_path) ? "--" : gr->src_path);
+		isempty(gr->srcPath) ? "--" : gr->srcPath);
 	fprintf(fp, "%12s %s\n", "dst path",  
-		isempty(gr->dst_path)  ? "--" : gr->dst_path); 
+		isempty(gr->dstPath)  ? "--" : gr->dstPath); 
 	fprintf(fp, "%12s %s\n", "sym name", 
-		isempty(gr->sym_name) ? "--" : gr->sym_name);
-	fprintf(fp, "%12s %08x\n", "file opt", gr->file_flags);
+		isempty(gr->symName) ? "--" : gr->symName);
+	fprintf(fp, "%12s: type:%d, hdr:%d, append:%d\n", "file opt", 
+		gr->fileType, gr->bHeader, gr->bAppend);
 
 	fputs("--- pal ---\n", fp);
-	fprintf(fp, "%12s %08x\n", "pal opt", gr->pal_flags);
-	fprintf(fp, "%12s [%d, %d>\n", "pal range", gr->pal_start, gr->pal_end);
+	fprintf(fp, "%12s: pm:%d, dt:%d, cprs:%d\n", "pal opts", 
+		gr->palProcMode, gr->palDataType, gr->palCompression);
+
+	fprintf(fp, "%12s [%d, %d)\n", "pal range", gr->palStart, gr->palEnd);
 
 	fputs("--- image ---\n", fp);
-	fprintf(fp, "%12s %08x\n", "img opt", gr->img_flags);
-	fprintf(fp, "%12s %d\n", "img bpp", gr->img_bpp);
-	fprintf(fp, "%12s %d\n", "img ofs", gr->img_ofs);
-	fprintf(fp, "%12s (%d,%d)-(%d,%d)\n", "img range", 
-		gr->area_left, gr->area_top, gr->area_right, gr->area_bottom);
+	fprintf(fp, "%12s: pm:%d, dt:%d, cprs:%d\n", "gfx opts", 
+		gr->gfxProcMode, gr->gfxDataType, gr->gfxCompression);
+
+	fprintf(fp, "%12s %d\n", "gfx bpp", gr->gfxBpp);
+	fprintf(fp, "%12s %d\n", "gfx ofs", gr->gfxOffset);
+	fprintf(fp, "%12s (%d,%d)-(%d,%d)\n", "gfx range", 
+		gr->areaLeft, gr->areaTop, gr->areaRight, gr->areaBottom);
 
 	fputs("--- map ---\n", fp);
-	fprintf(fp, "%12s %08x\n", "map opt", gr->map_flags);
-	fprintf(fp, "%12s %d\n", "map ofs", gr->map_ofs);
+	fprintf(fp, "%12s: pm:%d, dt:%d, cprs:%d\n", "map opts", 
+		gr->mapProcMode, gr->mapDataType, gr->mapCompression);
+
+	fprintf(fp, "%12s %d\n", "map ofs", gr->mapOffset);
 	fprintf(fp, "%12s [%d, %d]\n", "meta size", 
-		gr->meta_width, gr->meta_height);
+		gr->metaWidth, gr->metaHeight);
 }
 
 // {src} >{>} {dst-dir}/{dst-title}.{dst-ext} {+ .h}
@@ -236,246 +278,156 @@ void grit_dump(GRIT_REC *gr, FILE *fp)
 // { {sym}{Tiles/Bitmap} : {cprs}, u{n}, {n} bpp, +{ofs} }
 // { {sym}Map : {cprs}, u{n}, -{tfp}, {layout}, +{ofs}
 // Area : ({al},{at})-({ar},{ab}){ Meta : {w},{h} }
-void grit_dump_short(GRIT_REC *gr, FILE *fp, const char *pre)
+void grit_dump_short(GritRec *gr, FILE *fp, const char *pre)
 {
 	if(pre==NULL)
 		pre= "";
 
-	int val;
-
 	fputs(pre, fp);
 	fprintf(fp, "%s >%s %s.%s %s\n", 
-		gr->src_path, (gr->file_flags&GRIT_FILE_CAT ? ">":""), 
-		gr->dst_path, (gr->file_flags&GRIT_FILE_H ? "+.h":"") );
+		gr->srcPath, (gr->bAppend ? ">":""), 
+		gr->dstPath, (gr->bHeader ? "+.h":"") );
 
-	val= gr->pal_flags;
-	if(val&GRIT_INCL)
+	if(gr->palProcMode != GRIT_EXCLUDE)
 	{
 		fputs(pre, fp);
 		fprintf(fp, "%s%s : %s cprs, %s, [%d,%d>\n", 
-			gr->sym_name, cAffix[E_PAL],
-			cCprs[BF_GET(val,GRIT_CPRS)], cTypes[BF_GET(val,GRIT_U)], 
-			gr->pal_start, gr->pal_end);
+			gr->symName, cAffix[E_PAL],
+			cCprs[gr->palCompression], cTypes[gr->palDataType], 
+			gr->palStart, gr->palEnd);
 	}
-	val=gr->img_flags;
-	if(val&GRIT_INCL)
+
+	if(gr->gfxProcMode != GRIT_EXCLUDE)
 	{
 		fputs(pre, fp);
 		fprintf(fp, "%s%s : %s cprs, %s, %dbpp, +%d\n", 
-			gr->sym_name, cAffix[(val&GRIT_IMG_BMP ? E_BM : E_TILE)],
-			cCprs[BF_GET(val,GRIT_CPRS)], cTypes[BF_GET(val,GRIT_U)], 
-			gr->img_bpp, gr->img_ofs);
+			gr->symName, cAffix[gr->gfxMode ? E_BM : E_TILE],
+			cCprs[gr->gfxCompression], cTypes[gr->gfxDataType], 
+			gr->gfxBpp, gr->gfxOffset);
 	}
-	val= gr->map_flags;
-	if(val&GRIT_INCL)
+
+	if(gr->mapProcMode != GRIT_EXCLUDE)
 	{
 		fputs(pre, fp);
 		fprintf(fp, "%s%s : %s cprs, %s, ", 
-			gr->sym_name, cAffix[E_MAP],
-			cCprs[BF_GET(val,GRIT_CPRS)], cTypes[BF_GET(val,GRIT_U)]);
-		if(gr->map_flags & GRIT_RDX_ON)
+			gr->symName, cAffix[E_MAP],
+			cCprs[gr->mapCompression], cTypes[gr->mapDataType]);
+		if(gr->mapRedux)
 		{
 			fputs("-t", fp);
-			if(val & GRIT_RDX_FLIP)
+			if(gr->mapRedux & GRIT_RDX_FLIP)
 				fputs("f", fp);
-			if(val & GRIT_RDX_PAL)
+			if(gr->mapRedux & GRIT_RDX_PAL)
 				fputs("p", fp);
 			fputs(", ", fp);
 		}
 		const char *layouts[]={ "reg flat", "reg sbb", "affine" };
 		fprintf(fp, "%s, +%d\n",
-			layouts[BF_GET(val,GRIT_MAP_LAY)], gr->map_ofs);
+			layouts[gr->mapLayout], gr->mapOffset);
 	}
 	fputs(pre, fp);
 	fprintf(fp, "Area : (%d,%d)-(%d,%d)    ", 
-		gr->area_left, gr->area_top, gr->area_right, gr->area_bottom);
-	fprintf(fp, "Meta: %d,%d\n", gr->meta_width, gr->meta_height);
+		gr->areaLeft, gr->areaTop, gr->areaRight, gr->areaBottom);
+	fprintf(fp, "Meta: %d,%d\n", gr->metaWidth, gr->metaHeight);
 }
 
 // --- Validation -----------------------------------------------------
 
-//! Validate parameters.
-/*!	Makes sure all the settings in \a gr are valid. For example, 
-	tilemap and bitmap mode are mutually exclusive; bpp must be 
-	1, 2, 4, 8, or 16 and more of such kind. Some things are fatal
-	(those two are), but some can be accounted for like reversed 
-	pal start and end indices and non-aligned areas.
-	\todo Add path and var-name validation.
-*/
-BOOL grit_validate(GRIT_REC *gr)
+
+bool grit_validate_paths(GritRec *gr)
 {
-	lprintf(LOG_STATUS, 
-"Validatating gr.\n");
-
-
-	int tmp;
-	u32 flags;
 	char str[MAXPATHLEN];
 
-	// source dib MUST be loaded already!
-	if(gr->src_dib == NULL)
-	{
-		lprintf(LOG_ERROR, 
-"  No input bitmap. Validation failed.\n");
-		return FALSE;
-	}
-
-	// --- paths & names ---
-	if(~gr->file_flags & GRIT_FILE_NO_OUT)
+	// Only validate destination if there's going to be export.
+	if(gr->bExport)
 	{
 		// Must have either src or dst paths
-		if( isempty(gr->src_path) && isempty(gr->dst_path) )
+		if( isempty(gr->srcPath) && isempty(gr->dstPath) )
 		{
-			lprintf(LOG_ERROR, 
-"  No input or output paths. Validation failed.\n");
+			lprintf(LOG_ERROR, "  No input or output paths. Validation failed.\n");
+			return false;
 		}
 
-		if(gr->src_path == NULL)
+		if(gr->srcPath == NULL)
 		{
-			strrepl(&gr->src_path, "");
-			lprintf(LOG_WARNING, 
-"  No explicit src path.\n");
+			strrepl(&gr->srcPath, "");
+			lprintf(LOG_WARNING, "  No explicit src path.\n");
 		}
 		else
-			path_fix_sep(gr->src_path);
+			path_fix_sep(gr->srcPath);
 
 		// No dst path? Get from source
-		if(isempty(gr->dst_path))
+		if(isempty(gr->dstPath))
 		{
-			strrepl(&gr->dst_path, path_get_name(gr->src_path));
-			lprintf(LOG_WARNING, 
-"  No explicit dst path. Borrowing from src path.\n");
+			strrepl(&gr->dstPath, path_get_name(gr->srcPath));
+			lprintf(LOG_WARNING, "  No explicit dst path. Borrowing from src path.\n");
 		}
 
 		// Fix extension
-		path_repl_ext(str, gr->dst_path, 
-			cFileTypes[BF_GET(gr->file_flags, GRIT_FTYPE)], MAXPATHLEN);
-		strrepl(&gr->dst_path, str);
-		path_fix_sep(gr->dst_path);
+		path_repl_ext(str, gr->dstPath, cFileTypes[gr->fileType], MAXPATHLEN);
+		strrepl(&gr->dstPath, str);
+		path_fix_sep(gr->dstPath);
 
 		// If no symbol name:
 		// - append mode : from src
 		// - create mode : from dst 
-		if(isempty(gr->sym_name))
+		if(isempty(gr->symName))
 		{
-			if(gr->file_flags & GRIT_FILE_CAT)			
+			if(gr->bAppend)			
 			{
-				path_get_title(str, gr->src_path, MAXPATHLEN);
-				strrepl(&gr->sym_name, str);
+				path_get_title(str, gr->srcPath, MAXPATHLEN);
+				strrepl(&gr->symName, str);
 		
-				lprintf(LOG_WARNING, 
-"  No explicit symbol name. In append mode, so using src title.\n");
+				lprintf(LOG_WARNING, "  No explicit symbol name. In append mode, so using src title.\n");
 			}
 			else
 			{
-				path_get_title(str, gr->dst_path, MAXPATHLEN);
-				strrepl(&gr->sym_name, str);
+				path_get_title(str, gr->dstPath, MAXPATHLEN);
+				strrepl(&gr->symName, str);
 
-				lprintf(LOG_WARNING, 
-"  No explicit symbol name. In overwrite mode, so using dst title.\n");
+				lprintf(LOG_WARNING, "  No explicit symbol name. In overwrite mode, so using dst title.\n");
 			}
 		}
-		str_fix_ident(gr->sym_name, gr->sym_name, MAXPATHLEN);
+		str_fix_ident(gr->symName, gr->symName, MAXPATHLEN);
 	}
 
-	// --- options ---
+	return true;	
+}
 
-	// bpp must be 2^n; truecolor WILL be bitmaps
-	int bpp= gr->img_bpp;
-	switch(bpp)
-	{
-	case 0:
-		gr->img_bpp=8;
-	case 1: case 2: case 4: case 8:
-		break;
-	case 16: case 24: case 32:
-		gr->img_bpp= 16;
-		gr->img_flags |= GRIT_IMG_BMP;	// set to bitmap
+bool grit_validate_area(GritRec *gr)
+{
+	int tmp;
 
-		gr->map_flags= 0;				// no map 
-		gr->pal_flags &= ~GRIT_INCL;	// no pal either
-		break;
-	default:
-		lprintf(LOG_ERROR, "  Bad bpp (%d).\n", bpp);
-		return FALSE;
-	}
-
-
-	// bitmap - tilemap mismatch
-	if((gr->img_flags&GRIT_IMG_BMP) && gr->map_flags&GRIT_INCL)
-	{
-		lprintf(LOG_ERROR,
-"  Option mismatch: Can't map true-color bitmaps.\n");
-		return FALSE;
-	}
-
-	// binary cannot be appended
-	flags= gr->file_flags&GRIT_FTYPE_MASK;
-	if(flags==GRIT_FILE_BIN)
-	{
-		gr->file_flags &= ~GRIT_FILE_CAT;
-		lprintf(LOG_WARNING, 
-"  Can't append to binary files. Switching to override mode.");
-	}
-
-	// --- ranges ---
-
-	// palette
-	if(gr->pal_flags & GRIT_INCL)
-	{
-		if(gr->pal_start > gr->pal_end)
-		{
-			lprintf(LOG_WARNING, 
-"  Palette: start (%d) > end (%d): swapping.\n", gr->pal_start, gr->pal_end);
-
-			SWAP3(gr->pal_start, gr->pal_end, tmp);
-		}
-
-		if(gr->pal_start<0)
-		{
-			lprintf(LOG_WARNING, 
-"  Palette: start (%d) < 0. Clamping to 0.\n", gr->pal_start);
-			gr->pal_start= 0;
-		}
-
-		int nclrs= dib_get_nclrs(gr->src_dib);
-		if(nclrs != 0 && gr->pal_end > nclrs)
-		{
-			lprintf(LOG_WARNING, 
-"  Palette: end (%d) > #colors (%d). Clamping to %d.\n", nclrs);
-			gr->pal_end= nclrs;
-		}
-	}
+	//# FIXME: consider other proc-modes?
 	// area size
-	if((gr->img_flags&GRIT_INCL) || (gr->map_flags&GRIT_INCL))
+	if(gr->gfxProcMode != GRIT_EXCLUDE || gr->mapProcMode != GRIT_EXCLUDE)
 	{
 		int al, at, ar, ab;		// area
 		int aw, ah;				// area size
-		int blw, blh;			// block size
+		int blockW, blockH;		// block size
 
-		al= gr->area_left;	at= gr->area_top;
-		ar= gr->area_right;	ab= gr->area_bottom;
-		// normalize
+		al= gr->areaLeft;	at= gr->areaTop;
+		ar= gr->areaRight;	ab= gr->areaBottom;
+
+		// Normalize
 		if(al > ar)
 		{
-			lprintf(LOG_WARNING, 
-"  Area: left (%d) > right (%d). Swapping.\n", gr->area_left, gr->area_right);
+			lprintf(LOG_WARNING, "  Area: left (%d) > right (%d). Swapping.\n", 
+				gr->areaLeft, gr->areaRight);
 
 			SWAP3(al, ar, tmp);
 		}
 
 		if(at > ab)
 		{
-			lprintf(LOG_WARNING, 
-"  Area: top (%d) > bottom (%d). Swapping.\n", gr->area_top, gr->area_bottom);
+			lprintf(LOG_WARNING, "  Area: top (%d) > bottom (%d). Swapping.\n", 
+				gr->areaTop, gr->areaBottom);
 
 			SWAP3(at, ab, tmp);
 		}
 
-		if(ar == 0)
-			ar= dib_get_width(gr->src_dib);
-		if(ab == 0)
-			ab= dib_get_height(gr->src_dib);
+		if(ar == 0)	ar= dib_get_width(gr->srcDib);
+		if(ab == 0)	ab= dib_get_height(gr->srcDib);
 
 		aw= ar-al;
 		ah= ab-at;
@@ -486,41 +438,165 @@ BOOL grit_validate(GRIT_REC *gr)
 		// - one meta tile
 		// - one screenblock if in SBB layout
 		// PONDER: non-integral metatile/sbb ??
-		if(~gr->img_flags & GRIT_IMG_BMP)
-		{
-			if(~gr->map_flags & GRIT_MAP_REG)
-			{
-				if(gr->meta_width <= 0)
-					gr->meta_width= 1;
-				blw= gr->meta_width*8;
 
-				if(gr->meta_height <= 0)
-					gr->meta_height= 1;
-				blh= gr->meta_height*8;
-			}
-			else
-				blw= blh= 256;
+		if(gr->metaWidth  < 1)	gr->metaWidth = 1;
+		if(gr->metaHeight < 1)	gr->metaHeight= 1;
+
+		if(gr->gfxMode != GRIT_GFX_TILE)
+		{
+			if(gr->tileWidth  < 1)	gr->tileWidth = 1;
+			if(gr->tileHeight < 1)	gr->tileHeight= 1;
 		}
-		else	// Bitmap: no restrictions
-			blw= blh= 1;
+		else
+			gr->tileWidth= gr->tileHeight= 8;
+
+		// Normally, the blocks are tw*mw, th*mh in size.
+		// But for SBB-aligned maps it's a little different.
+		if(!(gr->mapProcMode==GRIT_EXPORT && gr->mapLayout==GRIT_MAP_REG))
+		{
+			blockW= gr->metaWidth*gr->tileWidth;
+			blockH= gr->metaHeight*gr->tileHeight;
+		}
+		else
+			blockW= blockH= 256;
+
+		if(aw%blockW != 0)
+		{
+			lprintf(LOG_WARNING, "Non-integer tiling in width (%d vs %d)\n", 
+				aw, blockW);
+			aw= align(aw, blockW);
+		}
+
+		if(ah%blockH != 0)
+		{
+			lprintf(LOG_WARNING, "Non-integer tiling in height (%d vs %d)\n", 
+				ah, blockH);
+			ah= align(ah, blockH);
+		}
 
 		// area must be multiple of metas (rounding up here)
-		aw= (aw+blw-1)/blw * blw;
-		ah= (ah+blh-1)/blh * blh;
+		//aw= (aw+blw-1)/blw * blw;
+		//ah= (ah+blh-1)/blh * blh;
 
 		// PONDER: but what about the image size?
 		//  *shrug* what about it?
 		ar= al+aw;
 		ab= at+ah;	
 
-		gr->area_left= al;	gr->area_top= at;
-		gr->area_right= ar;	gr->area_bottom= ab;
+		gr->areaLeft= al;	gr->areaTop= at;
+		gr->areaRight= ar;	gr->areaBottom= ab;
 	}
+
+	return true;	
+}
+
+
+//! Validate parameters.
+/*!	Makes sure all the settings in \a gr are valid. For example, 
+	tilemap and bitmap mode are mutually exclusive; bpp must be 
+	1, 2, 4, 8, or 16 and more of such kind. Some things are fatal
+	(those two are), but some can be accounted for like reversed 
+	pal start and end indices and non-aligned areas.
+*/
+bool grit_validate(GritRec *gr)
+{
+	int tmp;
+
+	lprintf(LOG_STATUS, "Validatating gr.\n");
+
+	// source dib MUST be loaded already!
+	if(gr->srcDib == NULL)
+	{
+		lprintf(LOG_ERROR, "  No input bitmap. Validation failed.\n");
+		return false;
+	}
+
+	if(!grit_validate_paths(gr))
+		return false;
+
+	// --- Options ---
+
+	// bpp must be 2^n; truecolor WILL be bitmaps
+	int bpp= gr->gfxBpp;
+	switch(bpp)
+	{
+	case 0:
+		gr->gfxBpp=8;
+	case 1: case 2: case 4: case 8:
+		break;
+	case 16: case 24: case 32:
+		gr->gfxBpp= 16;
+		// gr->gfxMode= GRIT_GFX_BMP;		// Set to bitmap
+
+		gr->mapProcMode= GRIT_EXCLUDE;	// No map. REPONDER
+		gr->palProcMode= GRIT_EXCLUDE;	// No pal either.
+		break;
+	default:
+		lprintf(LOG_ERROR, "  Bad bpp (%d).\n", bpp);
+		return false;
+	}
+
+
+	//# PONDER: mapping higher bpp might be useful after all.
+	// Bitmap - tilemap mismatch
+	if(gr->gfxMode != GRIT_GFX_TILE && gr->mapProcMode != GRIT_EXCLUDE)
+	{
+		lprintf(LOG_ERROR, "  Option mismatch: Can't map true-color bitmaps.\n");
+		return false;
+	}
+
+	// Raw binary cannot be appended
+	if(gr->fileType==GRIT_FTYPE_BIN && gr->bAppend)
+	{
+		gr->bAppend= false;
+		lprintf(LOG_WARNING, "  Can't append to binary files. Switching to override mode.");
+	}
+
+	// --- ranges ---
+
+	// palette
+	if(gr->palProcMode != GRIT_EXCLUDE)
+	{
+		if(gr->palStart > gr->palEnd)
+		{
+			lprintf(LOG_WARNING, "  Palette: start (%d) > end (%d): swapping.\n", 
+				gr->palStart, gr->palEnd);
+
+			SWAP3(gr->palStart, gr->palEnd, tmp);
+		}
+
+		if(gr->palStart<0)
+		{
+			lprintf(LOG_WARNING, "  Palette: start (%d) < 0. Clamping to 0.\n", 
+				gr->palStart);
+			gr->palStart= 0;
+		}
+
+		int nclrs= dib_get_nclrs(gr->srcDib);
+		if(nclrs != 0 && gr->palEnd > gr->palStart+nclrs)
+		{
+			lprintf(LOG_WARNING, "  Palette: end (%d) > #colors (%d). Clamping to %d.\n", 
+				gr->palStart+nclrs);
+			gr->palEnd= gr->palStart+nclrs;
+		}
+	}
+
+	if(!grit_validate_area(gr))
+		return false;
 
 	// PONDER: issue dump for status-log?
 
 	lprintf(LOG_STATUS, "Validation succeeded.\n");
-	return TRUE;
+	return true;
 }
+
+
+// --------------------------------------------------------------------
+
+// --------------------------------------------------------------------
+
+
+
+
 
 // EOF

@@ -1,6 +1,6 @@
 //
 //! \file grit_shared.cpp
-//!   GRIT_SHARED routines
+//!   GritShared routines
 //! \date 20050814 - 20070227
 //! \author cearn
 //
@@ -18,23 +18,23 @@
 
 
 // --------------------------------------------------------------------
-// GRIT_SHARED functions
+// GritShared functions
 // --------------------------------------------------------------------
 
-//! GRIT_SHARED constructor
-GRIT_SHARED *grs_alloc()
+//! GritShared constructor
+GritShared *grs_alloc()
 {
-	GRIT_SHARED *grs= (GRIT_SHARED*)malloc(sizeof(GRIT_SHARED));
+	GritShared *grs= (GritShared*)malloc(sizeof(GritShared));
 	if(grs == NULL)
 		return NULL;
 
-	memset(grs, 0, sizeof(GRIT_SHARED));
+	memset(grs, 0, sizeof(GritShared));
 
 	return grs;
 }
 
-//! GRIT_SHARED constructor
-void grs_free(GRIT_SHARED *grs)
+//! GritShared constructor
+void grs_free(GritShared *grs)
 {
 	if(grs == NULL)
 		return;
@@ -43,30 +43,84 @@ void grs_free(GRIT_SHARED *grs)
 	free(grs);
 }
 
-//! Clear GRIT_SHARED struct
-void grs_clear(GRIT_SHARED *grs)
+//! Clear GritShared struct
+void grs_clear(GritShared *grs)
 {
-	free(grs->sym_name);	
-	free(grs->path);
+	//free(grs->symName);	
+	free(grs->tilePath);
 	dib_free(grs->dib);
-	free(grs->pal_rec.data);
+	free(grs->palRec.data);
 	
-	memset(grs, 0, sizeof(GRIT_SHARED));
+	memset(grs, 0, sizeof(GritShared));
 }
 
 
-/*
-//! Run exporter with shared data
-void grs_run(GRIT_REC *grs, GRIT_REC *gr_base)
-{
-	//# Make copy of gr_base for flags, etc
-
-	//# Attach shared data
-
-	//# Run for shared gr
-
-	//# Detach shared data
-
-	//# delete gr
-}
+//! Run exporter with shared data.
+/*! \note	Still very unsafe, but I need to redo everything later anyway.
 */
+void grs_run(GritShared *grs, GritRec *gr_base)
+{
+	// Make sure we have shared data.
+	if( grs->dib==NULL && grs->palRec.data==NULL)
+	{
+		lprintf(LOG_WARNING, "No shared data to run with!\n");
+		return;
+	}
+
+	// Make copy of gr_base for flags, etc
+	GritRec *gr= grit_alloc();
+	grs_free(gr->shared);
+
+	*gr= *gr_base;
+	gr->srcPath= strdup(gr_base->srcPath);
+	gr->srcDib= NULL;
+	gr->dstPath= strdup(gr_base->dstPath);
+	gr->symName= strdup(gr_base->symName);
+	
+	gr->_gfxRec.data= NULL;
+	gr->_mapRec.data= NULL;
+	gr->_metaRec.data= NULL;
+	gr->_palRec.data= NULL;
+
+	// Attach shared data
+	gr->shared= grs;
+
+	if(grs->dib == NULL)
+	{
+		// Palette only. Create new dib.
+		gr->srcDib= dib_alloc(16, 16, 8, NULL);
+		memset(dib_get_pal(gr->srcDib), 0, PAL_MAX*RGB_SIZE);
+		memcpy(dib_get_pal(gr->srcDib), grs->palRec.data, rec_size(&grs->palRec));
+	}
+	else
+		gr->srcDib= dib_clone(grs->dib);
+
+	// NOTE: aliasing screws up deletion later; detach manually.
+	gr->_dib= gr->srcDib;	
+
+	// Run for shared gr
+	do 
+	{
+		if(!grit_validate(gr))
+			break;
+
+		bool grit_prep_gfx(GritRec *gr);
+		bool grit_prep_pal(GritRec *gr);
+
+		if(gr->gfxProcMode != GRIT_EXCLUDE)
+			grit_prep_gfx(gr);
+		
+		if(gr->palProcMode != GRIT_EXCLUDE)
+			grit_prep_pal(gr);
+
+		if(gr->bExport)
+			grit_export(gr);
+
+	} while(0);
+
+	gr->_dib= NULL;
+
+	// Detach shared data and delete gr
+	gr->shared= NULL;
+	grit_free(gr);
+}
