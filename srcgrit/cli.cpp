@@ -8,6 +8,7 @@
 
 #include "cli.h"
 #include <string.h>
+#include <stdlib.h>
 
 //! Find a key in a string array.
 /*!	\return key index or length of array if not found.
@@ -47,18 +48,18 @@ int cli_int(const char *key, const strvec &opts, int dflt)
 }
 
 //! Return the string following \a key, or \a dflt if \a key not found.
-char *cli_str(const char *key, const strvec &opts, char *dflt)
+char *cli_str(const char *key, const strvec &opts,const char *dflt)
 {
 	int pos = cli_find_key(key, opts);
 	if(pos >= opts.size())
-		return dflt;
+		return (char *)dflt;
 
 	char *str= &opts[pos][strlen(key)];
 	if(*str != '\0')					// attached field
 		return str;
 
 	if(pos == opts.size()-1)			// separate field, but OOB
-		return dflt;
+		return (char *)dflt;
 
 	return opts[pos+1];
 }

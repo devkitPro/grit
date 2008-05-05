@@ -15,7 +15,7 @@ typedef std::vector<char*> strvec;
 int cli_find_key(const char *key, const strvec &opts);
 int cli_int(const char *key, const strvec &opts, int dflt);
 bool cli_bool(const char *key, const strvec &opts);
-char *cli_str(const char *key, const strvec &opts, char *dflt);
+char *cli_str(const char *key, const strvec &opts, const char *dflt);
 
 
 /*
