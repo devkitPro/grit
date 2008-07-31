@@ -1,11 +1,16 @@
 //
 //! \file cldib_core.cpp
 //!   cldib_core implementation file
-//! \date 20050823 - 20060725
+//! \date 20050823 - 20080425
 //! \author cearn
 //
-// === NOTES === 
-// * 20060725,CLD: #ifdef around pure WIN32 functions
+/* === NOTES === 
+  * 20080425,jvijn: made dib_redim and dib_convert work on the 
+    image itself, not a copy; a converted copy is returned by 
+	dib_redim_copy and dib_convert. 
+  * Changed all BOOL/TRUE/FALSE into bool/true/false.
+  * 20060725,jvijn: #ifdef around pure WIN32 functions
+*/
 
 #include "cldib.h"
 
@@ -15,10 +20,10 @@
 // --------------------------------------------------------------------
 
 //! Get the main attributes of a DIB
-BOOL dib_get_attr(CLDIB *dib, int *width, int *height, int *bpp, int *pitch)
+bool dib_get_attr(CLDIB *dib, int *width, int *height, int *bpp, int *pitch)
 {
 	if(dib == NULL)
-		return FALSE;
+		return false;
 
 	if(width)
 		*width= dib_get_width(dib);
@@ -28,7 +33,7 @@ BOOL dib_get_attr(CLDIB *dib, int *width, int *height, int *bpp, int *pitch)
 		*bpp= dib_get_bpp(dib);
 	if(pitch)
 		*pitch= dib_get_pitch(dib);
-	return TRUE;
+	return true;
 }
 
 //! Get a pointer to the image data at pixel (\a x, \a y).
@@ -47,15 +52,15 @@ BYTE *dib_get_img_at(CLDIB *dib, int x, int y)
 *	\param bpp	Bitmap bitdepth (1, 4, 8, 16, 24, 32)
 *	\param data	Data to fill the bitmap with. If \c NULL, data will 
 *	  be uninitialized.
-*	\param bTopDown	If \c TRUE, the bitmap will be top-down (origin in 
-*	  the top-left); if \c FALSE, it'll be bottom up. Windows bitmaps 
+*	\param bTopDown	If \c true, the bitmap will be top-down (origin in 
+*	  the top-left); if \c false, it'll be bottom up. Windows bitmaps 
 *	  are traditionally bottom-up, with all the awkwardness that goes 
 *	  with it (as matrices and screens are usually top-down). 
 *	  \c CLDIBs are top-down by default.
 *	\note	Always call \c dib_free() on bitmaps when you're done with it.
 */
 CLDIB *dib_alloc(int width, int height, int bpp, const BYTE *data,
-	BOOL bTopDown /* TRUE */)
+	bool bTopDown /* true */)
 {
 	int ii;
 	CLDIB *dib= NULL;
@@ -164,6 +169,22 @@ CLDIB *dib_clone(CLDIB *src)
 	return dib;
 }
 
+
+//! Move the contents of \a src into \a dst.
+/*!
+	\note	Will FREE \a src!
+*/
+bool dib_mov(CLDIB *dst, CLDIB *src)
+{
+	if(dst==NULL || src==NULL || src->data==NULL)
+		return false;
+
+	SAFE_FREE(dst->data);
+	dst->data= src->data;
+	free(src);
+
+	return true;
+}
 
 // --- BITMAP / CANVAS ------------------------------------------------
 
@@ -340,22 +361,22 @@ int hbm_blit(HDC hdc, int dX, int dY, int dW, int dH,
 // --------------------------------------------------------------------
 
 //! Flip a bitmap horizontally (8, 16, 24, 32)
-BOOL dib_hflip(CLDIB *dib)
+bool dib_hflip(CLDIB *dib)
 {
 	if(dib == NULL) 
-		return FALSE;
+		return false;
 			
 	int dibW, dibH, dibB, dibP;
 	dib_get_attr(dib, &dibW, &dibH, &dibB, &dibP);
 
 	if(dibB < 8)
-		return FALSE;
+		return false;
 
 	BYTE *dibL, *bufD;
 
 	bufD= (BYTE*)malloc(dibP);
 	if(bufD == NULL)
-		return FALSE;
+		return false;
 
 	dibL= dib_get_img(dib);
 
@@ -377,24 +398,24 @@ BOOL dib_hflip(CLDIB *dib)
 
 	free(bufD);
 
-	return TRUE;
+	return true;
 }
 
 //! Flips a bitmap (IP, ok)
 /*!	\param dib bitmap to flip.
 *	\note This is an in-place flip.
 */
-BOOL dib_vflip(CLDIB *dib)
+bool dib_vflip(CLDIB *dib)
 {
 	BYTE *topL, *botL, *tempD;
 
 	if(dib == NULL) 
-		return FALSE;
+		return false;
 
 	DWORD dibP= dib_get_pitch(dib), dibH= dib_get_height(dib);
 	tempD= (BYTE*)malloc(dibP);
 	if(tempD == NULL)
-		return FALSE;
+		return false;
 
 	topL= dib_get_img(dib);
 	botL= topL+dibP*(dibH-1);
@@ -410,7 +431,7 @@ BOOL dib_vflip(CLDIB *dib)
 	}
 	free(tempD);
 
-	return TRUE;
+	return true;
 }
 
 
@@ -419,13 +440,13 @@ BOOL dib_vflip(CLDIB *dib)
 *	\note This does not actually flip the scanlines, just the sign of 
 *	  the height parameter.
 */
-BOOL dib_vflip2(CLDIB *dib)
+bool dib_vflip2(CLDIB *dib)
 {
 	if(!dib_vflip(dib))
-		return FALSE;
+		return false;
 	int hh= dib_get_height2(dib);
 	dib_get_hdr(dib)->biHeight= -hh;
-	return TRUE;
+	return true;
 }
 
 
@@ -438,11 +459,11 @@ BOOL dib_vflip2(CLDIB *dib)
 *	\param tt Top of rectangle.
 *	\param rr Right of rectangle.
 *	\param bb Bottom of rectangle.
-*	\param bClip If \c TRUE, the rectangle will be clipped to the 
+*	\param bClip If \c true, the rectangle will be clipped to the 
 *	  dimensions of \c src.
 *	\return Copied and cropped bitmap.	
 */
-CLDIB *dib_copy(CLDIB *src, int ll, int tt, int rr, int bb, BOOL bClip)
+CLDIB *dib_copy(CLDIB *src, int ll, int tt, int rr, int bb, bool bClip)
 {
 	if(src==NULL || ll==rr || tt==bb)
 		return NULL;
@@ -468,7 +489,7 @@ CLDIB *dib_copy(CLDIB *src, int ll, int tt, int rr, int bb, BOOL bClip)
 	}
 
 	int dstW= rr-ll, dstH= bb-tt;
-	CLDIB *dst= dib_alloc(dstW, dstH, srcB, NULL, TRUE);
+	CLDIB *dst= dib_alloc(dstW, dstH, srcB, NULL, true);
 	if(dst==NULL)
 		return NULL;
 	

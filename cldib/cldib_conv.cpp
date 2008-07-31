@@ -49,6 +49,49 @@ RGBQUAD str2rgb(const char *str)
 
 // === DIB FUNCTIONS ==================================================
 
+bool dib_convert(CLDIB *dib, int dstB, DWORD base)
+{
+	// Nothing to do
+	if(dib && dib_get_bpp(dib)==dstB && base==0)
+		return true;
+
+	CLDIB *tmp= dib_convert_copy(dib, dstB, base);
+	return dib_mov(dib, tmp);
+}
+
+bool dib_bit_unpack(CLDIB *dib, int dstB, DWORD base)
+{
+	// Nothing to do
+	if(dib && dib_get_bpp(dib)==dstB && base==0)
+		return true;
+
+	CLDIB *tmp= dib_bit_unpack_copy(dib, dstB, base);
+	return dib_mov(dib, tmp);
+}
+
+bool dib_8_to_true(CLDIB *dib, int dstB)
+{
+	CLDIB *tmp= dib_8_to_true_copy(dib, dstB);
+	return dib_mov(dib, tmp);
+}
+
+bool dib_true_to_true(CLDIB *dib, int dstB)
+{
+	// Nothing to do
+	if(dib && dib_get_bpp(dib)==dstB)
+		return true;
+
+	CLDIB *tmp= dib_true_to_true_copy(dib, dstB);
+	return dib_mov(dib, tmp);
+}
+
+bool dib_true_to_8(CLDIB *dib, int nclrs)
+{
+	CLDIB *tmp= dib_true_to_8_copy(dib, nclrs);
+	return dib_mov(dib, tmp);
+}
+
+
 //! Hub for bpp conversion (all <code>-\></code> all; CPY; ok).
 /*!	\param src Source bitmap.
 	\param dstB Destination bitdepth (all)
@@ -57,7 +100,7 @@ RGBQUAD str2rgb(const char *str)
 */
 // PONDER: have flags for RGB/BGR and stuff? (Or does that belong to 
 // data?)
-CLDIB *dib_convert(CLDIB *src, int dstB, DWORD base)
+CLDIB *dib_convert_copy(CLDIB *src, int dstB, DWORD base)
 {
 	if(src == NULL)
 		return NULL;
@@ -68,7 +111,7 @@ CLDIB *dib_convert(CLDIB *src, int dstB, DWORD base)
 	// 1,4,8 -> 1,4,8   via bit(un)pack
 	if(srcB <= 8 && dstB <= 8)
 	{
-		return dib_bit_unpack(src, dstB, base);
+		return dib_bit_unpack_copy(src, dstB, base);
 	}
 	// --- palette <-> truecolor ---
 	// 1,4 -> 8
@@ -77,8 +120,8 @@ CLDIB *dib_convert(CLDIB *src, int dstB, DWORD base)
 	{
 		CLDIB *tmp= NULL, *dst= NULL;
 		if(srcB<8)
-			src= tmp= dib_bit_unpack(src, 8, base);
-		dst= dib_8_to_true(src, dstB);
+			src= tmp= dib_bit_unpack_copy(src, 8, base);
+		dst= dib_8_to_true_copy(src, dstB);
 		dib_free(tmp);
 		return dst;
 	}
@@ -93,12 +136,12 @@ CLDIB *dib_convert(CLDIB *src, int dstB, DWORD base)
 		if(base != 0 && base<nclrs)
 			nclrs= base;
 		
-		tmp= dib_true_to_8(src, nclrs);
+		tmp= dib_true_to_8_copy(src, nclrs);
 		if(tmp == NULL)
 			return NULL;
 		if(dstB == 8)
 			return tmp;
-		dst= dib_bit_unpack(tmp, dstB, 0);
+		dst= dib_bit_unpack_copy(tmp, dstB, 0);
 		dib_free(tmp);
 		return dst;
 	}
@@ -108,7 +151,7 @@ CLDIB *dib_convert(CLDIB *src, int dstB, DWORD base)
 	// 32->16, 32->24
 	else if(srcB > 8 && dstB > 8)
 	{
-		return dib_true_to_true(src, dstB);
+		return dib_true_to_true_copy(src, dstB);
 	}
 	return NULL;
 }
@@ -124,7 +167,7 @@ CLDIB *dib_convert(CLDIB *src, int dstB, DWORD base)
 *	  will only add to non-zero pixels.
 *	\return (Un)packed bitmap; \c NULL on failure.
 */
-CLDIB *dib_bit_unpack(CLDIB *src, int dstB, DWORD base)
+CLDIB *dib_bit_unpack_copy(CLDIB *src, int dstB, DWORD base)
 {
 	if(src == NULL)
 		return NULL;
@@ -136,7 +179,7 @@ CLDIB *dib_bit_unpack(CLDIB *src, int dstB, DWORD base)
 	CLDIB *dst= dib_alloc(srcW, srcH, dstB, NULL, dib_is_topdown(src));
 
 	if(dst==NULL)
-		return FALSE;
+		return false;
 
 	BYTE *srcD= dib_get_img(src), *dstD= dib_get_img(dst);
 
@@ -172,7 +215,7 @@ CLDIB *dib_bit_unpack(CLDIB *src, int dstB, DWORD base)
 	if(nclrs)
 	{
 		nclrs--;
-		BOOL bBase0= base&BUP_BASE0;
+		bool bBase0= (base&BUP_BASE0)!=0;
 		RGBQUAD *srcPal= dib_get_pal(src), *dstPal= dib_get_pal(dst);
 		if(srcB>dstB)	// pack: src uses base
 		{
@@ -201,7 +244,7 @@ CLDIB *dib_bit_unpack(CLDIB *src, int dstB, DWORD base)
 *	\param dstB Destination bitdepth. Must be 16, 24 or 32.
 *	\return Converted bitmap on success; \c NULL on failure
 */
-CLDIB *dib_8_to_true(CLDIB *src, int dstB)
+CLDIB *dib_8_to_true_copy(CLDIB *src, int dstB)
 {
 	if(src == NULL || dib_get_bpp(src)!=8 || dstB<=8)
 		return NULL;
@@ -213,7 +256,7 @@ CLDIB *dib_8_to_true(CLDIB *src, int dstB)
 	CLDIB *dst= dib_alloc(srcW, srcH, dstB, NULL, dib_is_topdown(src));
 
 	if(dst==NULL)
-		return FALSE;
+		return false;
 
 	BYTE *srcD= dib_get_img(src), *dstD= dib_get_img(dst);
 
@@ -243,7 +286,7 @@ CLDIB *dib_8_to_true(CLDIB *src, int dstB)
 *	\param dstB Destination bitdepth.
 *	\return Converted bitmap on success; \c NULL on failure	
 */
-CLDIB *dib_true_to_true(CLDIB *src, int dstB)
+CLDIB *dib_true_to_true_copy(CLDIB *src, int dstB)
 {
 	if(src == NULL || dib_get_bpp(src)<=8 || dstB <= 8)
 		return NULL;
@@ -258,7 +301,7 @@ CLDIB *dib_true_to_true(CLDIB *src, int dstB)
 	CLDIB *dst= dib_alloc(srcW, srcH, dstB, NULL, dib_is_topdown(src));
 
 	if(dst==NULL)
-		return FALSE;
+		return false;
 
 	BYTE *srcD= dib_get_img(src), *dstD= dib_get_img(dst);
 
@@ -286,14 +329,14 @@ CLDIB *dib_true_to_true(CLDIB *src, int dstB)
 *	  always 8 bpp, though).
 *	\return Converted bitmap on success; \c NULL on failure
 */
-CLDIB *dib_true_to_8(CLDIB *src, int nclrs)
+CLDIB *dib_true_to_8_copy(CLDIB *src, int nclrs)
 {
 	if(src == NULL || dib_get_bpp(src) <= 8)
 		return NULL;
 
 	CLDIB *tmp= NULL, *dst= NULL;
 	if(dib_get_bpp(src) != 24)
-		src= tmp= dib_true_to_true(src, 24);
+		src= tmp= dib_true_to_true_copy(src, 24);
 	if(src == NULL)
 		return NULL;
 	try
@@ -323,7 +366,7 @@ CLDIB *dib_true_to_8(CLDIB *src, int nclrs)
 *	  \arg \c base {30} : Big-endian bit read
 *	  \arg \c base {31} : Add offset to zero-valued pixels too
 */
-BOOL data_bit_unpack(void *dstv, const void *srcv, 
+bool data_bit_unpack(void *dstv, const void *srcv, 
 	int srcS, int srcB, int dstB, DWORD base)
 {
 	if(srcB > dstB)
@@ -336,7 +379,7 @@ BOOL data_bit_unpack(void *dstv, const void *srcv,
 	int dstN= dstB*srcS*8/srcB;			// # dst bits
 	dstN= (dstN+31)/32;					// # dst u32s
 
-	BOOL bBase0= (base&BUP_BASE0) != 0;
+	bool bBase0= (base&BUP_BASE0) != 0;
 	DWORD srcEndMask= ((base&BUP_BEBIT) && srcB<8) ? 8-srcB : 0;
 	DWORD dstEndMask= ((base&BUP_BEBIT) && dstB<8) ? 8-dstB : 0;
 	base &= ~(BUP_BEBIT|BUP_BASE0);
@@ -367,7 +410,7 @@ BOOL data_bit_unpack(void *dstv, const void *srcv,
 		*dstL4++ = dstBuf;
 	}
  
-	return TRUE;
+	return true;
 }
 
 //! Bit packs data, with optional extras (ok).
@@ -384,7 +427,7 @@ BOOL data_bit_unpack(void *dstv, const void *srcv,
 *	\note \a base works as inverse of base in bit_unpack. But AN 
 *		EXACT INVERSE IS IMPOSSIBLE
 */
-BOOL data_bit_pack(void *dstv, const void *srcv, 
+bool data_bit_pack(void *dstv, const void *srcv, 
 	int srcS, int srcB, int dstB, DWORD base)
 {
 	if(dstB > srcB)
@@ -397,7 +440,7 @@ BOOL data_bit_pack(void *dstv, const void *srcv,
 
 	int srcN= (srcS+3)/4;
 
-	BOOL bBase0= (base&BUP_BASE0)!=0;
+	bool bBase0= (base&BUP_BASE0)!=0;
 	DWORD srcEndMask= ((base&BUP_BEBIT) && srcB<8) ? 8-srcB : 0;
 	DWORD dstEndMask= ((base&BUP_BEBIT) && dstB<8) ? 8-dstB : 0;
 	base &= ~(BUP_BEBIT|BUP_BASE0);
@@ -435,7 +478,7 @@ BOOL data_bit_pack(void *dstv, const void *srcv,
 		*dstL4++ = dstBuf;
 	}
 
-	return TRUE;
+	return true;
 }
 
 
@@ -447,14 +490,14 @@ BOOL data_bit_pack(void *dstv, const void *srcv,
 *	\param bpp Bitdepth of the chunks to reverse (1, 2, 4)
 *	\note \a dst and \a src may be aliased safely.
 */
-BOOL data_bit_rev(void *dstv, const void *srcv, int len, int bpp)
+bool data_bit_rev(void *dstv, const void *srcv, int len, int bpp)
 {
 	if(bpp>8)
-		return FALSE;
+		return false;
 	else if(bpp==8)
 	{
 		memcpy(dstv, srcv, len);
-		return TRUE;
+		return true;
 	}
 
 	BYTE *srcL= (BYTE*)srcv, *dstL= (BYTE*)dstv;
@@ -469,7 +512,7 @@ BOOL data_bit_rev(void *dstv, const void *srcv, int len, int bpp)
 		*dstL++= (BYTE)out;
 	}
 	
-	return TRUE;
+	return true;
 }
 
 
@@ -484,10 +527,10 @@ BOOL data_bit_rev(void *dstv, const void *srcv, int len, int bpp)
 *	\note \a len is in bytes, not chunks; \a len should be a multiple 
 *	  of \a chunk (though not strictly required).
 */
-BOOL data_byte_rev(void *dstv, const void *srcv, int len, int chunk)
+bool data_byte_rev(void *dstv, const void *srcv, int len, int chunk)
 {
 	if(chunk<1)
-		return FALSE;
+		return false;
 
 	if(srcv != dstv)	// dst and src separate
 	{
@@ -521,7 +564,7 @@ BOOL data_byte_rev(void *dstv, const void *srcv, int len, int chunk)
 		}
 	}
 
-	return TRUE;
+	return true;
 }
 
 
@@ -533,7 +576,7 @@ BOOL data_byte_rev(void *dstv, const void *srcv, int len, int chunk)
 *	\param dstB Destination bitdepth.
 *	\param pal Palette to use for colors.
 */
-BOOL data_8_to_true(void *dstv, const void *srcv, int srcS, 
+bool data_8_to_true(void *dstv, const void *srcv, int srcS, 
 	int dstB, RGBQUAD *pal)
 {
 	int ii;
@@ -575,10 +618,10 @@ BOOL data_8_to_true(void *dstv, const void *srcv, int srcS,
 			break;
 		}
 	default:
-		return FALSE;
+		return false;
 	}
 
-	return TRUE;
+	return true;
 }
 
 
@@ -589,13 +632,13 @@ BOOL data_8_to_true(void *dstv, const void *srcv, int srcS,
 *	\param srcB Source bitdepth
 *	\param dstB Destination bitdepth.
 */
-BOOL data_true_to_true(void *dstv, const void *srcv, int srcS, 
+bool data_true_to_true(void *dstv, const void *srcv, int srcS, 
 	int srcB, int dstB)
 {
 	if(srcB == dstB)	// same depth, just copy
 	{
 		memcpy(dstv, srcv, srcS);
-		return TRUE;
+		return true;
 	}
 
 	int ii, nn;
@@ -613,7 +656,7 @@ BOOL data_true_to_true(void *dstv, const void *srcv, int srcS,
 				RGBTRIPLE *pixel = (RGBTRIPLE *)&srcD[ofs*ii];
 				dstD2[ii]= RGB16(pixel->rgbtRed , pixel->rgbtGreen, pixel->rgbtBlue);
 			}
-			return TRUE;
+			return true;
 		}
 	case 24:	// 16|32 -> bb gg rr
 		if(srcB==16)	// 16->24
@@ -640,7 +683,7 @@ BOOL data_true_to_true(void *dstv, const void *srcv, int srcS,
 				dstD3[ii].rgbtRed=   srcD4[ii].rgbRed;
 			}
 		}
-		return TRUE;
+		return true;
 	case 32:	// bb gg rr 00
 		if(srcB==16)	// 16->32
 		{
@@ -668,12 +711,12 @@ BOOL data_true_to_true(void *dstv, const void *srcv, int srcS,
 				dstD4[ii].rgbReserved= 0xFF;
 			}
 		}
-		return TRUE;
+		return true;
 	default:
-		return FALSE;
+		return false;
 	}
 
-	return TRUE;
+	return true;
 }
 
 // EOF

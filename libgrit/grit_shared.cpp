@@ -1,10 +1,11 @@
 //
 //! \file grit_shared.cpp
 //!   GritShared routines
-//! \date 20050814 - 20070227
+//! \date 20050814 - 20080512
 //! \author cearn
 //
-// === NOTES === 
+/* === NOTES === 
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -71,16 +72,8 @@ void grs_run(GritShared *grs, GritRec *gr_base)
 	GritRec *gr= grit_alloc();
 	grs_free(gr->shared);
 
-	*gr= *gr_base;
-	gr->srcPath= strdup(gr_base->srcPath);
-	gr->srcDib= NULL;
-	gr->dstPath= strdup(gr_base->dstPath);
-	gr->symName= strdup(gr_base->symName);
-	
-	gr->_gfxRec.data= NULL;
-	gr->_mapRec.data= NULL;
-	gr->_metaRec.data= NULL;
-	gr->_palRec.data= NULL;
+	grit_copy_options(gr, gr_base);
+	grit_copy_strings(gr, gr_base);
 
 	// Attach shared data
 	gr->shared= grs;

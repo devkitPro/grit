@@ -42,7 +42,7 @@
 ///////////////////////////////////////////////////////////////////////
 
 // 3D array indexation
-#define INDEX(r, g, b)	((r << 10) + (r << 6) + r + (g << 5) + g + b)
+#define INDEX(r, g, b)	( (r)*33*33 + (g)*33 + (b) )
 
 
 // Constructor / Destructor
@@ -117,18 +117,18 @@ WuQuantizer::Hist3D(LONG *vwt, LONG *vmr, LONG *vmg, LONG *vmb, float *m2)
 
 	BYTE *pxl, rr, gg, bb;
 
-	for(iy=0; iy < imgH; iy++)
+	for(iy=0; iy<imgH; iy++)
 	{
 		pxl= dib_get_img_at(mDib, 0, iy);
-		for(ix=0; ix < imgW; ix++)	
+		for(ix=0; ix<imgW; ix++)	
 		{
 			rr= pxl[CCID_RED];
 			gg= pxl[CCID_GREEN];
 			bb= pxl[CCID_BLUE];
 
-			inr = (rr >> 3) + 1;
-			ing = (gg >> 3) + 1;
-			inb = (bb >> 3) + 1;
+			inr = rr/8 + 1;
+			ing = gg/8 + 1;
+			inb = bb/8 + 1;
 			Qadd[iy*imgW + ix] = ii = INDEX(inr, ing, inb);
 			// [inr][ing][inb]
 			vwt[ii]++;
@@ -496,7 +496,7 @@ WuQuantizer::Quantize(int PalSize)
 		int srcW= dib_get_width(mDib);
 		int srcH= dib_get_height(mDib);
 
-		dst= dib_alloc(srcW, srcH, 8, NULL, TRUE);
+		dst= dib_alloc(srcW, srcH, 8, NULL, true);
 		if(dst == NULL)
 			throw "Not enough memory";
 

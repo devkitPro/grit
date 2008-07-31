@@ -247,8 +247,9 @@ struct GritRec
 // (Meta-)tiles/map:
 	u8		 tileWidth;		//!< Tile width (in pixels) (-tw{num} ).
 	u8		 tileHeight;	//!< Tile height (in pixels) (-th{num} ).
-	u8		 metaWidth;		//!< Meta-tile/object width (in tiles) (-Mw{num} )
-	u8		 metaHeight;	//!< Meta-tile/object height (in tiles) (-Mh{num} )
+	u8		 metaWidth;		//!< Meta-tile/object width (in tiles) (-Mw{num} ).
+	u8		 metaHeight;	//!< Meta-tile/object height (in tiles) (-Mh{num} ).
+	bool	 bColMajor;		//!< Tiles are arranged in column-major order (-tc).
 
 // Palette ( [s,e> )
 	echar	 palProcMode;	//!< Palette process mode (-p).
@@ -294,6 +295,9 @@ void grit_free(GritRec *gr);			// de-alloc gr
 void grit_init(GritRec *gr);			// set members to default values
 bool grit_init_from_dib(GritRec *gr);	// extra inits from src_dib parameters
 void grit_clear(GritRec *gr);			// clears internal allocations
+
+void grit_copy_options(GritRec *dst, const GritRec *src);
+void grit_copy_strings(GritRec *dst, const GritRec *src);
 
 bool grit_run(GritRec *gr);
 

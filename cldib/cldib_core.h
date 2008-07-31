@@ -46,13 +46,11 @@
 #endif
 
 #ifndef MAX
-
 //! Get the maximum of two values
 #define MAX(a, b)	(((a) > (b)) ? (a) : (b))
 #endif
 
 #ifndef MIN
-
 //! Get the minimum of two values
 #define MIN(a, b)	(((a) < (b)) ? (a) : (b))
 #endif
@@ -71,7 +69,6 @@ INLINE unsigned int align(unsigned int x, unsigned int size);
 INLINE int clamp(int x, int min, int max);
 INLINE int reflect(int x, int min, int max);
 INLINE int wrap(int x, int min, int max);
-
 
 /*!	\}	*/
 
@@ -178,7 +175,7 @@ CLDIB *dib_load_##_type##(const char *fpath)
 
 //! Create standard declaration for saving \a _type images.
 #define SAVE_DECL(_type) \
-BOOL dib_save_##_type##(const char *fpath, CLDIB *dib)
+bool dib_save_##_type##(const char *fpath, CLDIB *dib)
 
 //! Safety routine: free() and NULLify \a _mem pointer.
 #define SAFE_FREE(ptr)			do { free(ptr); ptr= NULL; } while(0)
@@ -230,7 +227,7 @@ INLINE int dib_align(int width, int bpp);	// align to 32bit boundary
 
 INLINE int dib_padding(CLDIB *dib);			// # padding bytes
 INLINE int dib_get_size(CLDIB *dib);
-INLINE BOOL dib_is_topdown(CLDIB *dib);
+INLINE bool dib_is_topdown(CLDIB *dib);
 
 INLINE int dib_get_width(CLDIB *dib);
 INLINE int dib_get_height(CLDIB *dib);		// always >0
@@ -240,7 +237,7 @@ INLINE int dib_get_pitch(CLDIB *dib);
 INLINE int dib_get_nclrs(CLDIB *dib);
 INLINE int dib_get_size_img(CLDIB *dib);
 
-BOOL dib_get_attr(CLDIB *dib, int *width, int *height, int *bpp, int *pitch);
+bool dib_get_attr(CLDIB *dib, int *width, int *height, int *bpp, int *pitch);
 // \}
 
 //! \name DIB sections
@@ -260,15 +257,16 @@ BYTE *dib_get_img_at(CLDIB *dib, int x, int y);
 // \{
 
 CLDIB *dib_alloc(int width, int height, int bpp, const BYTE *data, 
-	BOOL bTopDown=TRUE);
+	bool bTopDown=true);
 void dib_free(CLDIB *dib);
 CLDIB *dib_clone(CLDIB *src);
+bool dib_mov(CLDIB *dst, CLDIB *src);
 INLINE RGBQUAD *dib_pal_cpy(CLDIB *dst, CLDIB *src);
-CLDIB *dib_copy(CLDIB *src, int ll, int tt, int rr, int bb, BOOL bClip);
+CLDIB *dib_copy(CLDIB *src, int ll, int tt, int rr, int bb, bool bClip);
 
-BOOL dib_hflip(CLDIB *dib);
-BOOL dib_vflip(CLDIB *dib);		// turns lines, but h >0
-BOOL dib_vflip2(CLDIB *dib);	// top-down <-> bottom-up
+bool dib_hflip(CLDIB *dib);
+bool dib_vflip(CLDIB *dib);		// turns lines, but h >0
+bool dib_vflip2(CLDIB *dib);	// top-down <-> bottom-up
 
 // \}
 
@@ -386,7 +384,7 @@ INLINE int dib_get_size(CLDIB *dib)
 {	return BMIH_SIZE + dib_get_nclrs(dib)*RGB_SIZE + dib_get_size_img(dib);	}
 
 //! Indicated whether the DIB is top-down or bottom-up (default).
-INLINE BOOL dib_is_topdown(CLDIB *dib)
+INLINE bool dib_is_topdown(CLDIB *dib)
 {	return dib_get_height2(dib) < 0;	}
 
 //! Copy the palette of two dibs.

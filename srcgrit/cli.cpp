@@ -13,55 +13,55 @@
 //! Find a key in a string array.
 /*!	\return key index or length of array if not found.
 */
-int cli_find_key(const char *key, const strvec &opts)
+int cli_find_key(const char *key, const strvec &args)
 {
-	int ii;
-	for(ii=1; ii<opts.size(); ii++)
-		if(strncmp(key, opts[ii], strlen(key)) == 0)
+	int ii, count= args.size();
+	for(ii=1; ii<count; ii++)
+		if(strncmp(key, args[ii], strlen(key)) == 0)
 			break;
 
 	return ii;
 }
 
-//! Return whether \a key is present in \a opts.
-bool cli_bool(const char *key, const strvec &opts)
+//! Return whether \a key is present in \a args.
+bool cli_bool(const char *key, const strvec &args)
 {
-	return cli_find_key(key, opts) < opts.size();
+	return cli_find_key(key, args) < (int)args.size();
 }
 
 //! Return the integer following \a key, or \a dflt if \a key not found.
-int cli_int(const char *key, const strvec &opts, int dflt)
+int cli_int(const char *key, const strvec &args, int dflt)
 {
-	int pos = cli_find_key(key, opts);
-	if(pos >= opts.size())
+	int pos = cli_find_key(key, args), count= args.size();
+	if(pos >= count)
 		return dflt;
 
-	char *str= &opts[pos][strlen(key)];
+	char *str= &args[pos][strlen(key)];
 
 	if(*str != '\0')					// attached field
 		return strtoul(str, NULL, 0);
 
-	if(pos == opts.size()-1)			// separate field, but OOB
+	if(pos == count-1)			// separate field, but OOB
 		return dflt;
 
-	return strtoul(opts[pos+1], NULL, 0);
+	return strtoul(args[pos+1], NULL, 0);
 }
 
 //! Return the string following \a key, or \a dflt if \a key not found.
-char *cli_str(const char *key, const strvec &opts,const char *dflt)
+char *cli_str(const char *key, const strvec &args, const char *dflt)
 {
-	int pos = cli_find_key(key, opts);
-	if(pos >= opts.size())
+	int pos = cli_find_key(key, args), count= args.size();
+	if(pos >= count)
 		return (char *)dflt;
 
-	char *str= &opts[pos][strlen(key)];
+	char *str= &args[pos][strlen(key)];
 	if(*str != '\0')					// attached field
 		return str;
 
-	if(pos == opts.size()-1)			// separate field, but OOB
+	if(pos == count-1)			// separate field, but OOB
 		return (char *)dflt;
 
-	return opts[pos+1];
+	return args[pos+1];
 }
 
 // TODO cli_range ... somehow :P

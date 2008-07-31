@@ -98,7 +98,7 @@ char *path_get_dir(char *dst, const char *path, int size)
 	if(!dst || !path)
 		return NULL;
 
-	char *pc= strrchr(path, DIR_SEP);
+	char *pc= (char*)strrchr(path, DIR_SEP);
 	if(pc == NULL)
 	{
 		dst[0]= '\0';
@@ -125,7 +125,7 @@ char *path_get_title(char *dst, const char *path, int size)
 		return 0;
 	}
 	// Find directory part
-	char *pc= strrchr(path, DIR_SEP);
+	const char *pc= strrchr(path, DIR_SEP);
 	if(pc)
 		path= pc+1;
 	// find extension part
@@ -149,14 +149,14 @@ char *path_get_ext(const char *path)
 		return NULL;
 
 	// make sure we don't mistake '.' in dirs
-	char *pc= strrchr(path, DIR_SEP);
+	const char *pc= strrchr(path, DIR_SEP);
 	if(pc)
 		path= pc;
 	// check for real extension
 	pc=	strrchr(path, '.');
 	if(pc)
 		pc++;
-	return pc;
+	return (char*)pc;
 }
 
 // --- extra ---
@@ -167,11 +167,10 @@ char *path_get_name(const char *path)
 	if(!path)
 		return NULL;
 
-	char *pc= strrchr(path, DIR_SEP);
-	if(pc)
-		return pc+1;
-	else
-		return (char*)path;
+	const char *pc= strrchr(path, DIR_SEP);
+	pc= pc ? pc+1 : path;
+
+	return (char*)pc;
 }
 
 char *path_get_xext(const char *path)
@@ -181,14 +180,15 @@ char *path_get_xext(const char *path)
 		return NULL;
 
 	// Skip directory part
-	char *pc= strrchr(path, DIR_SEP);
+	const char *pc= strrchr(path, DIR_SEP);
 	if(pc)
 		path= pc;
 	// Find full extension
 	pc= strchr(path, '.');
 	if(pc)
 		pc++;
-	return pc;
+
+	return (char*)pc;
 }
 
 char *path_get_xtitle(char *dst, const char *path, int size)
@@ -204,7 +204,7 @@ char *path_get_xtitle(char *dst, const char *path, int size)
 		return 0;
 	}
 	// Find directory part
-	char *pc= strrchr(path, DIR_SEP);
+	const char *pc= strrchr(path, DIR_SEP);
 	if(pc)
 		path= pc;
 	// find full extension
@@ -419,6 +419,9 @@ char *strrepl(char **dst, const char *src)
 */
 char *strtrim(char *dst, const char *src)
 {	
+	if(src==NULL || dst== NULL)
+		return NULL;
+
 	const char *p1= src;
 	const char *p2= src + strlen(src)-1;
 
@@ -442,10 +445,14 @@ char *strtrim(char *dst, const char *src)
 
 
 //! Create a valid C name. 
-/*! That means alphanum or '_' only; starting with a letter.
+/*! 
+	That means alphanum or '_' only; starting with a letter.
 */
 char *str_fix_ident(char *dst, const char *src, int size)
 {
+	if(src==NULL || dst==NULL)
+		return NULL;
+
 	// ASSERT(path);
 	// ASSERT(dst);
 	int ii=0, c;
@@ -469,12 +476,14 @@ char *str_fix_ident(char *dst, const char *src, int size)
 
 char *strupr(char *str)
 {
+	if(str==NULL)
+		return NULL;
+
 	char *ptr;
 
 	for(ptr=str; *ptr; ptr++)
 		*ptr= toupper(*ptr);
 	return str;
-
 }
 
 #endif // _WIN32
@@ -819,5 +828,6 @@ bool xp_data_bin(const char *fname, const void *data, int len, const char *fmode
 	}
 	return false;
 }
+
 
 // EOF

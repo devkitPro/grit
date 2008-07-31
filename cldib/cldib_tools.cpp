@@ -1,10 +1,14 @@
 //
 //! \file cldib_tools.cpp
 //!   cldib_tools implementation file
-//! \date 20050823 - 20080204
+//! \date 20050823 - 20080225
 //! \author cearn
 //
 /* === NOTES ===
+  * 20080425,jvijn: made dib_redim and dib_convert work on the 
+    image itself, not a copy; a converted copy is returned by 
+	dib_redim_copy and dib_convert. 
+  * Changed all BOOL/TRUE/FALSE into bool/true/false.
 */
 
 #include "cldib_core.h"
@@ -29,15 +33,22 @@ DWORD rgb_dist(const RGBQUAD *a, const RGBQUAD *b)
 
 // --- DIB FUNCTIONS --------------------------------------------------
 
-//! Redimensions or retiles the contents of the DIB
+
+//! Redimensions or retiles the contents of the DIB and returns a copy.
 /*!
-	\param src
+	\param src		Source bitmap.
+	\param dstW		Destination width (= tile width).
+	\param tileH	Tile height.
+	\param tileN	Number of tiles.
+	\notes	If dstW<srcW, it will convert from matrix to array; 
+			if dstW>srcW, the transformation is from array to matrix.
+	\todo	Gorram rewrite so that it's legible again &gt;_&lt;
 */
 // CHK: unpadded works
 // DESC: redimensions/(un)tiles a dib into a column of tiles with 
 //   dimensions dstW x tileH. Can also work in reverse (if srcW<dstW)
 // NOTE: padding pixels may cause problems
-CLDIB *dib_redim(CLDIB *src, int dstW, int tileH, int tileN)
+CLDIB *dib_redim_copy(CLDIB *src, int dstW, int tileH, int tileN)
 {
 	if(src == NULL)
 		return NULL;
@@ -67,7 +78,7 @@ CLDIB *dib_redim(CLDIB *src, int dstW, int tileH, int tileN)
 			memcpy(&srcD[ii*srcR], &srcRec.data[ii*srcP], srcR);
 		srcRec.data= srcD;
 	}
-	BOOL bOK= data_redim(&srcRec, &dstRec, tileH, tileN);
+	bool bOK= data_redim(&srcRec, &dstRec, tileH, tileN);
 	SAFE_FREE(srcD);
 	if(!bOK)
 		return NULL;
@@ -94,6 +105,26 @@ CLDIB *dib_redim(CLDIB *src, int dstW, int tileH, int tileN)
 
 	return dst;
 }
+
+//! Redimensions or retiles the contents of the DIB.
+/*!
+	\param dib		Bitmap to retile.
+	\param dstW		Destination width (= tile width).
+	\param tileH	Tile height.
+	\param tileN	Number of tiles.
+	\notes	If dstW<srcW, it will convert from matrix to array; 
+			if dstW>srcW, the transformation is from array to matrix.
+*/
+bool dib_redim(CLDIB *dib, int dstW, int tileH, int tileN)
+{
+	// Nothing to do
+	if(dib && dib_get_width(dib)==dstW)
+		return true;
+
+	CLDIB *tmp= dib_redim_copy(dib, dstW, tileH, tileN);
+	return dib_mov(dib, tmp);
+}
+
 
 // --- DATA FUNCTIONS -------------------------------------------------
 
@@ -140,14 +171,14 @@ CLDIB *dib_redim(CLDIB *src, int dstW, int tileH, int tileN)
 // dst: w of destination; other fields are output
 // tileH: height of a tile
 // tileN: # output tiles; if <=0, number is taken from source dims.
-BOOL data_redim(const RECORD *src, RECORD *dst, int tileH, int tileN)
+bool data_redim(const RECORD *src, RECORD *dst, int tileH, int tileN)
 {
 	int ii, jj;
 	int srcW= src->width, srcH= src->height, dstW= dst->width;
 
 	// must be able to fit at least one tile
 	if(srcH < tileH)
-		return FALSE;
+		return false;
 
 	BYTE *srcL, *dstL;
 
@@ -206,7 +237,7 @@ BOOL data_redim(const RECORD *src, RECORD *dst, int tileH, int tileN)
 		}						
 	}
 
-	return TRUE;
+	return true;
 }
 
 // --------------------------------------------------------------------
@@ -348,9 +379,9 @@ CLDIB *dib_load_dflt(const char *fpath, void *extra)
 }
 
 //! Default/dummy file-writer (does nothing)
-BOOL dib_save_dflt(const CLDIB *dib, const char *fpath, void *extra)
+bool dib_save_dflt(const CLDIB *dib, const char *fpath, void *extra)
 {
-	return FALSE;
+	return false;
 }
 
 

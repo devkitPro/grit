@@ -53,8 +53,9 @@ RGBQUAD str2rgb(const char *str);
 *	\{
 */
 
-CLDIB *dib_redim(CLDIB *src, int tileW, int tileH, int tileN);
-BOOL data_redim(const RECORD *src, RECORD *dst, int tileH, int tileN);
+CLDIB *dib_redim_copy(CLDIB *src, int tileW, int tileH, int tileN);
+bool dib_redim(CLDIB *dib, int dstW, int tileH, int tileN);
+bool data_redim(const RECORD *src, RECORD *dst, int tileH, int tileN);
 
 //! \name Redox functions
 //\{
@@ -73,11 +74,19 @@ int dib_pal_reduce(CLDIB *dib, RECORD *extPal);
 
 //! \name DIB converters
 // \{
-CLDIB *dib_convert(CLDIB *src, int dstB, DWORD base);
-CLDIB *dib_bit_unpack(CLDIB *src, int dstB, DWORD base);
-CLDIB *dib_8_to_true(CLDIB *src, int dstB);
-CLDIB *dib_true_to_true(CLDIB *src, int dstB);
-CLDIB *dib_true_to_8(CLDIB *src, int nclrs);
+
+bool dib_convert(CLDIB *dib, int dstB, DWORD base);
+bool dib_bit_unpack(CLDIB *dib, int dstB, DWORD base);
+bool dib_8_to_true(CLDIB *dib, int dstB);
+bool dib_true_to_true(CLDIB *dib, int dstB);
+bool dib_true_to_8(CLDIB *dib, int nclrs);
+
+CLDIB *dib_convert_copy(CLDIB *src, int dstB, DWORD base);
+CLDIB *dib_bit_unpack_copy(CLDIB *src, int dstB, DWORD base);
+CLDIB *dib_8_to_true_copy(CLDIB *src, int dstB);
+CLDIB *dib_true_to_true_copy(CLDIB *src, int dstB);
+CLDIB *dib_true_to_8_copy(CLDIB *src, int nclrs);
+
 // \}
 
 
@@ -87,16 +96,16 @@ CLDIB *dib_true_to_8(CLDIB *src, int nclrs);
 INLINE WORD swap_word(WORD nn);
 INLINE DWORD swap_dword(DWORD nn);
 
-BOOL data_bit_unpack(void *dstv, const void *srcv, 
+bool data_bit_unpack(void *dstv, const void *srcv, 
 	int srcS, int srcB, int dstB, DWORD base);
-BOOL data_bit_pack(void *dstv, const void *srcv, 
+bool data_bit_pack(void *dstv, const void *srcv, 
 	int srcS, int srcB, int dstB, DWORD base);
-BOOL data_bit_rev(void *dstv, const void *srcv, int len, int bpp);
-BOOL data_byte_rev(void *dstv, const void *srcv, int len, int chunk);
+bool data_bit_rev(void *dstv, const void *srcv, int len, int bpp);
+bool data_byte_rev(void *dstv, const void *srcv, int len, int chunk);
 
-BOOL data_8_to_true(void *dstv, const void *srcv, int srcS, 
+bool data_8_to_true(void *dstv, const void *srcv, int srcS, 
 	int dstB, RGBQUAD *pal);
-BOOL data_true_to_true(void *dstv, const void *srcv, int srcS, 
+bool data_true_to_true(void *dstv, const void *srcv, int srcS, 
 	int srcB, int dstB);
 
 // \}
@@ -109,13 +118,13 @@ BOOL data_true_to_true(void *dstv, const void *srcv, int srcS,
 /*!	\addtogroup grpColor	*/
 /*!	\{	*/
 
-BOOL dib_invert(CLDIB *dib);
+bool dib_invert(CLDIB *dib);
 
 //! \name Main adjustment routines
 // \{
 
-BOOL dib_adjust(CLDIB *dib, BYTE lut[], enum eClrChannel cce);
-BOOL data_adjust(BYTE *data, BYTE lut[], enum eClrChannel cce, 
+bool dib_adjust(CLDIB *dib, BYTE lut[], enum eClrChannel cce);
+bool data_adjust(BYTE *data, BYTE lut[], enum eClrChannel cce, 
 	int nn, int ofs);
 
 // \}
@@ -124,19 +133,19 @@ BOOL data_adjust(BYTE *data, BYTE lut[], enum eClrChannel cce,
 //! \name Lut initialisers
 // \{
 
-BOOL dib_lut_brightness(BYTE lut[], double perc);
-BOOL dib_lut_contrast(BYTE lut[], double perc);
-BOOL dib_lut_gamma(BYTE lut[], double gamma);
-BOOL dib_lut_invert(BYTE lut[]);
-BOOL dib_lut_intensity(BYTE lut[], double perc);
-BOOL dib_lut_linear(BYTE lut[], double a, double b);
+bool dib_lut_brightness(BYTE lut[], double perc);
+bool dib_lut_contrast(BYTE lut[], double perc);
+bool dib_lut_gamma(BYTE lut[], double gamma);
+bool dib_lut_invert(BYTE lut[]);
+bool dib_lut_intensity(BYTE lut[], double perc);
+bool dib_lut_linear(BYTE lut[], double a, double b);
 
 // \}
 
 //!	\name Color replacers
 // \{
-BOOL dib_pal_replace(CLDIB *dib, DWORD dst[], DWORD src[], int nn);
-BOOL dib_pixel_replace(CLDIB *dib, DWORD dst[], DWORD src[], int nn);
+bool dib_pal_replace(CLDIB *dib, DWORD dst[], DWORD src[], int nn);
+bool dib_pixel_replace(CLDIB *dib, DWORD dst[], DWORD src[], int nn);
 // \}
 
 /*	\}	/addtogroup grpColor	*/
@@ -161,7 +170,7 @@ BOOL dib_pixel_replace(CLDIB *dib, DWORD dst[], DWORD src[], int nn);
 typedef CLDIB *(*fnDibLoad)(const char *fpath, void *extra);
  
 //! General file-writer type
-typedef BOOL (*fnDibSave)(const CLDIB *dib, const char *fpath, void *extra);
+typedef bool (*fnDibSave)(const CLDIB *dib, const char *fpath, void *extra);
 
 
 extern fnDibLoad dib_load;
@@ -171,7 +180,7 @@ fnDibLoad dib_set_load_proc(fnDibLoad proc);
 fnDibSave dib_set_save_proc(fnDibSave proc);
 
 CLDIB *dib_load_dflt(const char *fpath, void *extra);
-BOOL dib_save_dflt(const CLDIB *dib, const char *fpath, void *extra);
+bool dib_save_dflt(const CLDIB *dib, const char *fpath, void *extra);
 
 //\}
 

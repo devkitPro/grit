@@ -95,7 +95,7 @@ CPcxFile &CPcxFile::operator=(const CPcxFile &rhs)
 // Reads 1, 4 or 8 bit PCXs
 // Assumes RLE encoding. Always.
 // (Of course, there's very little difference if it's not encoded)
-BOOL CPcxFile::Load(const char *fpath)
+bool CPcxFile::Load(const char *fpath)
 {
 	FILE *fp= fopen(fpath, "rb");
 	CLDIB *dib= NULL;
@@ -124,7 +124,7 @@ BOOL CPcxFile::Load(const char *fpath)
 		imgS= imgH*imgP;
 
 		// now we set-up the full bitmap
-		dib= dib_alloc(imgW, imgH, imgB, NULL, TRUE);
+		dib= dib_alloc(imgW, imgH, imgB, NULL, true);
 		if(dib == NULL)
 			throw CImgFile::sMsgs[ERR_ALLOC];
 
@@ -259,7 +259,7 @@ BOOL CPcxFile::Load(const char *fpath)
 		fclose(fp);
 
 	if(!dib)
-		return FALSE;
+		return false;
 
 	// if we're here we've succeeded
 	SetMsg(CImgFile::sMsgs[ERR_NONE]);
@@ -269,13 +269,13 @@ BOOL CPcxFile::Load(const char *fpath)
 	mbGray= (hdr.paltype==2);
 	SetPath(fpath);
 
-	return TRUE;
+	return true;
 }
 
-BOOL CPcxFile::Save(const char *fpath)
+bool CPcxFile::Save(const char *fpath)
 {
 	FILE *fp= NULL;
-	BOOL bOK= TRUE;;
+	bool bOK= true;;
 
 	try
 	{
@@ -433,7 +433,7 @@ BOOL CPcxFile::Save(const char *fpath)
 	catch(const char *msg)
 	{
 		SetMsg(msg);
-		bOK= FALSE;
+		bOK= false;
 	}
 
 	if(fp)

@@ -34,10 +34,10 @@ CPalFile &CPalFile::operator=(const CPalFile &rhs)
 
 // === LOADER =========================================================
 
-BOOL CPalFile::Load(const char *fpath)
+bool CPalFile::Load(const char *fpath)
 {
 	CLDIB *dib= NULL;
-	BOOL bOK= FALSE;
+	bool bOK= false;
 	try
 	{
 		FILE *fp= fopen(fpath, "rt");
@@ -70,7 +70,7 @@ BOOL CPalFile::Load(const char *fpath)
 	}
 
 	if(!dib)
-		return FALSE;
+		return false;
 
 	// if we're here we've succeeded
 	SetMsg(CImgFile::sMsgs[ERR_NONE]);
@@ -79,7 +79,7 @@ BOOL CPalFile::Load(const char *fpath)
 	SetBpp(dib_get_bpp(dib));
 	SetPath(fpath);
 
-	return TRUE;
+	return true;
 }
 
 // --- internal loaders ---
@@ -100,7 +100,7 @@ CLDIB *CPalFile::LoadClr(const char *fpath)
 		nclrs= PAL_MAX;
 
 	// now we set-up the full bitmap
-	dib= dib_alloc(1, 1, 8, NULL, TRUE);
+	dib= dib_alloc(1, 1, 8, NULL, true);
 	if(dib == NULL)
 		throw CImgFile::sMsgs[ERR_ALLOC];
 
@@ -138,7 +138,7 @@ CLDIB *CPalFile::LoadRiff(const char *fpath)
 		throw CImgFile::sMsgs[ERR_FORMAT];
 
 	// now we set-up the full bitmap
-	dib= dib_alloc(1, 1, 8, NULL, TRUE);
+	dib= dib_alloc(1, 1, 8, NULL, true);
 	if(dib == NULL)
 		throw CImgFile::sMsgs[ERR_ALLOC];
 
@@ -147,7 +147,7 @@ CLDIB *CPalFile::LoadRiff(const char *fpath)
 		nclrs=PAL_MAX;
 
 	// now we set-up the full bitmap
-	dib= dib_alloc(1, 1, 8, NULL, TRUE);
+	dib= dib_alloc(1, 1, 8, NULL, true);
 	if(dib == NULL)
 		throw CImgFile::sMsgs[ERR_ALLOC];
 
@@ -184,7 +184,7 @@ CLDIB *CPalFile::LoadJasc(const char *fpath)
 		nclrs= PAL_MAX;
 
 	// now we set-up the full bitmap
-	dib= dib_alloc(1, 1, 8, NULL, TRUE);
+	dib= dib_alloc(1, 1, 8, NULL, true);
 	if(dib == NULL)
 		throw CImgFile::sMsgs[ERR_ALLOC];
 
@@ -207,10 +207,10 @@ CLDIB *CPalFile::LoadJasc(const char *fpath)
 
 // === SAVER ==========================================================
 
-BOOL CPalFile::Save(const char *fpath)
+bool CPalFile::Save(const char *fpath)
 {
 	FILE *fp= NULL;
-	BOOL bOK= TRUE;
+	bool bOK= true;
 
 	try
 	{
@@ -236,7 +236,7 @@ BOOL CPalFile::Save(const char *fpath)
 	catch(const char *msg)
 	{
 		SetMsg(msg);
-		bOK= FALSE;
+		bOK= false;
 	}
 
 	if(fp)

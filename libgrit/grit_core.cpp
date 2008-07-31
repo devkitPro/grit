@@ -1,7 +1,7 @@
 //
 //! \file grit_core.cpp
 //!   Core grit routines
-//! \date 20050814 - 20080211
+//! \date 20050814 - 20080512
 //! \author cearn
 //
 /* === NOTES === 
@@ -110,8 +110,8 @@ void grit_init(GritRec *gr)
 	// Area options (tl inclusive, rb exclusive).
 	gr->areaLeft= 0;
 	gr->areaTop= 0;
-	gr->areaRight= 0;	// mod later.
-	gr->areaBottom= 0;	// mod later.
+	gr->areaRight= 0;	// modified later.
+	gr->areaBottom= 0;	// modified later.
 
 	// Graphics options.
 	gr->gfxProcMode= GRIT_EXPORT;
@@ -137,6 +137,7 @@ void grit_init(GritRec *gr)
 	gr->tileHeight= 0;
 	gr->metaWidth= 1;
 	gr->metaHeight= 1;
+	gr->bColMajor= false;
 
 	// Palette options
 	gr->palProcMode= GRIT_EXPORT;
@@ -174,6 +175,77 @@ void grit_clear(GritRec *gr)
 	memset(gr, 0, sizeof(GritRec));
 	gr->shared= grs;
 }
+
+//! Copy the main options (no strings) from \a src to \a dst.
+void grit_copy_options(GritRec *dst, const GritRec *src)
+{
+	if(src==NULL || dst==NULL)
+		return;
+
+	// File/symbol options.	
+	dst->fileType= src->fileType;
+	dst->bHeader= src->bHeader;
+	dst->bAppend= src->bAppend;
+	dst->bExport= src->bExport;
+	dst->bRiff= src->bRiff;
+
+	// Area options (tl inclusive, rb exclusive).	
+	dst->areaLeft= src->areaLeft;
+	dst->areaTop= src->areaTop;
+	dst->areaRight= src->areaRight;
+	dst->areaBottom= src->areaBottom;
+
+	// Graphics options.	
+	dst->gfxProcMode= src->gfxProcMode;
+	dst->gfxDataType= src->gfxDataType;
+	dst->gfxCompression= src->gfxCompression;
+	dst->gfxMode= src->gfxMode;
+	dst->gfxHasAlpha= src->gfxHasAlpha;
+	dst->gfxAlphaColor= src->gfxAlphaColor;
+	dst->gfxBpp= src->gfxBpp;
+	dst->gfxOffset= src->gfxOffset;
+	dst->gfxIsShared= src->gfxIsShared;
+
+	// Map options.	
+	dst->mapProcMode= src->mapProcMode;
+	dst->mapDataType= src->mapDataType;
+	dst->mapCompression= src->mapCompression;
+	dst->mapRedux= src->mapRedux;
+	dst->mapLayout= src->mapLayout;
+	dst->mapOffset= src->mapOffset;
+
+	// Extra tile options	
+	dst->tileWidth= src->tileWidth;
+	dst->tileHeight= src->tileHeight;
+	dst->metaWidth= src->metaWidth;
+	dst->metaHeight= src->metaHeight;
+	dst->bColMajor= src->bColMajor;
+
+	// Palette options	
+	dst->palProcMode= src->palProcMode;
+	dst->palDataType= src->palDataType;
+	dst->palCompression= src->palCompression;
+	dst->palHasAlpha= src->palHasAlpha;
+	dst->palAlphaId= src->palAlphaId;
+	dst->palStart= src->palStart;
+	dst->palEnd= src->palEnd;	
+}
+
+//! Copy the string variables from \a src to \a dst.
+void grit_copy_strings(GritRec *dst, const GritRec *src)
+{
+	if(src==NULL || dst==NULL)
+		return;
+
+	strrepl(&dst->srcPath, src->srcPath);
+	strrepl(&dst->dstPath, src->dstPath);
+	strrepl(&dst->symName, src->symName);
+}
+
+
+// --------------------------------------------------------------------
+// 
+// --------------------------------------------------------------------
 
 
 //! Initialize palette and gfx-related functions from the DIB.

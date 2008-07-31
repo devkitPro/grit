@@ -81,6 +81,7 @@ typedef struct GBFS_ENTRY
   u32  data_offset;  /* in bytes from beginning of file */
 } GBFS_ENTRY;
 
+
 #define GBFL_SIZE sizeof(GBFS_FILE)
 #define GBEN_SIZE sizeof(GBFS_ENTRY)
 
@@ -1039,7 +1040,7 @@ bool grit_xp_h(GritRec *gr)
 	// include guards
 	strcpy(str, gr->symName);
 	strupr(str);
-	fprintf(fout, "#ifndef __%s__\n#define __%s__\n\n", str, str);
+	fprintf(fout, "#ifndef GRIT_%s_H\n#define GRIT_%s_H\n\n", str, str);
 
 
 	if(gr->bRiff)	// Single GRF item
@@ -1061,7 +1062,7 @@ bool grit_xp_h(GritRec *gr)
 	// include guards again
 	strcpy(str, gr->symName);
 	strupr(str);
-	fprintf(fout, "#endif // __%s__\n\n", str);
+	fprintf(fout, "#endif // GRIT_%s_H\n\n", str);
 
 	sprintf(tag, "//}}BLOCK(%s)",gr->symName);
 	fprintf(fout, "%s\n", tag);
@@ -1143,7 +1144,6 @@ bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 	{
 		tmp= rec_size(&gr->_palRec);
 		fprintf(fp, "%s\t+ palette %d entries, ", cmt, tmp/2);
-
 		fprintf(fp, "%s compressed\n", cCprs[gr->palCompression]);
 		
 		sprintf(str2, "%d + ", tmp);

@@ -52,7 +52,7 @@ FI_ENUM(FI_SUPPORT_MODE)
 void fiInit();
 
 FIBITMAP *fi_load(const char *fpath);
-BOOL fi_save(FIBITMAP *fi, const char *fpath);
+bool fi_save(FIBITMAP *fi, const char *fpath);
 
 FI_SUPPORT_MODE fiGetSupportModes(FREE_IMAGE_FORMAT fif);
 
@@ -72,7 +72,7 @@ int fiFillOfnFilter(char *szFilter, FI_SUPPORT_MODE fsm,
 CLDIB *fi2dib(FIBITMAP *fi);
 FIBITMAP *dib2fi(CLDIB *dib);
 CLDIB *cldib_load(const char *fpath, void *extra);
-BOOL cldib_save(const CLDIB *dib, const char *fpath, void *extra);
+bool cldib_save(const CLDIB *dib, const char *fpath, void *extra);
 
 /*!	\}	*/
 

@@ -21,7 +21,7 @@ enum eCldibID
 // (Bmp, Pcx, Png, etc)
 /*
 inline CLDIB *XxxLoad(const char *fpath);
-inline BOOL XxxLoad(const CLDIB *dib, const char *fpath);
+inline bool XxxLoad(const CLDIB *dib, const char *fpath);
 */
 #define IMG_LOAD_DEF(_img)                      \
 inline CLDIB *_img##Load(const char *fpath)	    \
@@ -30,7 +30,7 @@ inline CLDIB *_img##Load(const char *fpath)	    \
 #define IMG_SAVE_DEF(_img)                                  \
 inline CLDIB *_img##Save(const char *fpath, CLDIB *dib)     \
 {	C##_img##File img; img.Attach(dib);                     \
-    BOOL bOK=img.Save(fpath); return img.Detach();   }
+    bool bOK=img.Save(fpath); return img.Detach();   }
 
 // === IMG base =======================================================
 
@@ -43,7 +43,7 @@ enum eDibMsgs
 class CImgFile
 {
 public:
-	CImgFile() : mbActive(FALSE), mpMsg(NULL), 
+	CImgFile() : mbActive(false), mpMsg(NULL), 
 		mDib(NULL), mBpp(8), mPath(NULL) {}
 	virtual ~CImgFile()			{	Clear();			}
 	CImgFile &operator=(const CImgFile &rhs);
@@ -53,7 +53,7 @@ public:
 	CLDIB *Attach(CLDIB *dib);
 	void Destroy();
 	// Attribute interface
-	BOOL IsActive() const		{ return mbActive;	}
+	bool IsActive() const		{ return mbActive;	}
 	const char *GetMsg() const	{ return mpMsg;		}
 	int GetBpp() const			{ return mBpp;		}
 	void SetBpp(int bpp)		{ mBpp= bpp;		}
@@ -66,14 +66,14 @@ public:
 	virtual const char *GetExt() const		{ return ""; }
 	virtual const char *GetDesc() const		{ return ""; }
 	virtual const char *GetFormat() const	{ return ""; }
-	virtual BOOL Load(const char *fpath) = 0;
-	virtual BOOL Save(const char *fpath) = 0;
+	virtual bool Load(const char *fpath) = 0;
+	virtual bool Save(const char *fpath) = 0;
 protected:
 	CImgFile(const CImgFile&);
 	const char *SetMsg(const char *msg);
 	static const char *sMsgs[];
 protected:
-	BOOL mbActive;
+	bool mbActive;
 	const char *mpMsg;		// pointer to error msg on save/load
 	CLDIB *mDib;
 	int mBpp;
@@ -98,8 +98,8 @@ public:
 	virtual const char *GetExt() const		{ return "bmp"; }
 	virtual const char *GetDesc() const		{ return "Windows Bitmap"; }
 	virtual const char *GetFormat() const	{ return "BMP"; }
-	virtual BOOL Load(const char *fpath);
-	virtual BOOL Save(const char *fpath);
+	virtual bool Load(const char *fpath);
+	virtual bool Save(const char *fpath);
 protected:
 	static const char *sMsgs[];
 };
@@ -122,8 +122,8 @@ public:
 	virtual const char *GetExt() const		{ return "pal"; }
 	virtual const char *GetDesc() const		{ return "Palette Files"; }
 	virtual const char *GetFormat() const	{ return "PAL"; }
-	virtual BOOL Load(const char *fpath);
-	virtual BOOL Save(const char *fpath);
+	virtual bool Load(const char *fpath);
+	virtual bool Save(const char *fpath);
 protected:
 	CLDIB *LoadClr(const char *fpath);
 	CLDIB *LoadRiff(const char *fpath);
@@ -141,7 +141,7 @@ class CPcxFile : public CImgFile
 {
 public:
 	// --- creation ---
-	CPcxFile() : CImgFile(), mbGray(FALSE) {}
+	CPcxFile() : CImgFile(), mbGray(false) {}
 	CPcxFile &operator=(const CPcxFile &rhs);
 	virtual CImgFile *VMake()	{ return SMake();		}
 	static CPcxFile *SMake()	{ return new CPcxFile;	}
@@ -150,10 +150,10 @@ public:
 	virtual const char *GetExt() const		{ return "pcx"; }
 	virtual const char *GetDesc() const		{ return "ZSoft Paintbrush"; }
 	virtual const char *GetFormat() const	{ return "PCX"; }
-	virtual BOOL Load(const char *fpath);
-	virtual BOOL Save(const char *fpath);
+	virtual bool Load(const char *fpath);
+	virtual bool Save(const char *fpath);
 public:
-	BOOL mbGray;
+	bool mbGray;
 protected:
 	static const char *sMsgs[];
 };
@@ -167,7 +167,7 @@ class CPngFile : public CImgFile
 {
 public:
 	// --- creation ---
-	CPngFile() : CImgFile(), mbTrans(FALSE), mClrTrans(0) {}
+	CPngFile() : CImgFile(), mbTrans(false), mClrTrans(0) {}
 	CPngFile &operator=(const CPngFile &rhs);
 	virtual CImgFile *VMake()	{ return SMake();		}
 	static CPngFile *SMake()	{ return new CPngFile;	}
@@ -176,10 +176,10 @@ public:
 	virtual const char *GetExt() const		{ return "png"; }
 	virtual const char *GetDesc() const		{ return "Portable Network Graphics"; }
 	virtual const char *GetFormat() const	{ return "PNG"; }
-	virtual BOOL Load(const char *fpath);
-	virtual BOOL Save(const char *fpath);
+	virtual bool Load(const char *fpath);
+	virtual bool Save(const char *fpath);
 public:
-	BOOL mbTrans;
+	bool mbTrans;
 	COLORREF mClrTrans;
 protected:
 	static const char *sMsgs[];
@@ -203,8 +203,8 @@ public:
 	virtual const char *GetExt() const		{ return "tga,targa"; }
 	virtual const char *GetDesc() const		{ return "Truevision Targa"; }
 	virtual const char *GetFormat() const	{ return "targa"; }
-	virtual BOOL Load(const char *fpath);
-	virtual BOOL Save(const char *fpath);
+	virtual bool Load(const char *fpath);
+	virtual bool Save(const char *fpath);
 protected:
 	static const char *sMsgs[];
 };

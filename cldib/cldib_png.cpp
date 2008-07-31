@@ -59,12 +59,12 @@ CPngFile &CPngFile::operator=(const CPngFile &rhs)
 
 // === LOADER =========================================================
 
-BOOL CPngFile::Load(const char *fpath)
+bool CPngFile::Load(const char *fpath)
 {
 	FILE *fp= fopen(fpath, "rb");
 	CLDIB *dib= NULL;
 
-	BOOL bTrans= FALSE;
+	bool bTrans= false;
 
 	// allocatable pointers
 	png_struct *png_ptr= NULL;
@@ -138,7 +138,7 @@ BOOL CPngFile::Load(const char *fpath)
 		// --- allocate dib ---
 		imgP= dib_align(imgW, imgB);
 		imgS= imgP*imgH;
-		dib= dib_alloc(imgW, imgH, imgB, NULL, TRUE);
+		dib= dib_alloc(imgW, imgH, imgB, NULL, true);
 		if(dib == NULL)
 			throw CImgFile::sMsgs[ERR_ALLOC];
 
@@ -204,7 +204,7 @@ BOOL CPngFile::Load(const char *fpath)
 		fclose(fp);
 
 	if(!dib)
-		return FALSE;
+		return false;
 
 	// if we're here we've succeeded
 	SetMsg(CImgFile::sMsgs[ERR_NONE]);
@@ -215,13 +215,13 @@ BOOL CPngFile::Load(const char *fpath)
 
 	SetPath(fpath);
 
-	return TRUE;
+	return true;
 }
 
-BOOL CPngFile::Save(const char *fpath)
+bool CPngFile::Save(const char *fpath)
 {
 	FILE *fp= NULL;
-	BOOL bOK= TRUE;
+	bool bOK= true;
 
 	// all the declarations you'll ever need
 	png_struct *png_ptr= NULL;
@@ -343,7 +343,7 @@ BOOL CPngFile::Save(const char *fpath)
 	catch(const char *msg)
 	{
 		SetMsg(msg);
-		bOK= FALSE;
+		bOK= false;
 	}
 
 	if(png_pal)

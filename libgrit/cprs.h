@@ -36,7 +36,7 @@ enum ECprsTag
 };
 
 
-typedef void (*cprs_proc_t)(RECORD *dst, const RECORD *src);
+typedef bool (*cprs_proc_t)(RECORD *dst, const RECORD *src);
 
 
 // --------------------------------------------------------------------

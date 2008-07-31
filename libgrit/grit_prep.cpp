@@ -118,7 +118,8 @@ bool grit_prep_work_dib(GritRec *gr)
 		{
 			lprintf(LOG_WARNING, "  converting from %d bpp to %d bpp.\n", 
 				dibB, gr->gfxBpp);
-			CLDIB *dib2= dib_convert(dib, 16, 0);
+
+			CLDIB *dib2= dib_convert_copy(dib, 16, 0);
 
 			// If paletted src AND -pT AND NOT -gT[!]
 			//   use trans color pal[T]
@@ -193,15 +194,12 @@ bool grit_prep_work_dib(GritRec *gr)
 		lprintf(LOG_WARNING, "  converting from %d bpp to %d bpp.\n", 
 			dibB, gr->gfxBpp);
 		
-		CLDIB *dib2= dib_convert(dib, 8, 0);
-
-		dib_free(dib);
-		if(dib2 == NULL)
+		if(!dib_convert(dib, 8, 0))
 		{
+			dib_free(dib);
 			lprintf(LOG_ERROR, "  Bpp conversion failed.\n");	
 			return false;
 		}
-		dib= dib2;
 	}
 
 	// Palette transparency additions.
@@ -280,60 +278,67 @@ bool grit_prep_work_dib(GritRec *gr)
 
 //! Rearranges the work dib into a strip of 8x8 tiles.
 /*!	This only runs for tiled images and can have up to three 
-	stages. First, Rearrange into screen-blocks (option -mLr); then 
-	into metatiles (-M[w h]), then base-tiles.
+	stages. First, Rearrange into screen-blocks (option -mLs); then 
+	into metatiles (-Mw, -Mh), then base-tiles.
 */
 bool grit_prep_tiles(GritRec *gr)
 {
 	lprintf(LOG_STATUS, "Tile preparation.\n");
 
-	CLDIB *dib= NULL;
+	// Main sizes
+	int imgW= dib_get_width(gr->_dib), imgH= dib_get_height(gr->_dib);
+	int tileW= gr->tileWidth, tileH= gr->tileHeight;
+	int metaW= gr->metaWidth, metaH= gr->metaHeight;
 
-	// Sbb redim
-	if(gr->mapProcMode==GRIT_EXPORT && gr->mapLayout == GRIT_MAP_REG)
+	// Tiling sizes for stages
+	int blockW=256, blockH=256;						// For sbb tiling
+	int frameW=tileW*metaW, frameH=tileH*metaH;		// For meta tiling
+
+	bool bBlock= gr->mapProcMode==GRIT_EXPORT && gr->mapLayout == GRIT_MAP_REG;
+	bool bMeta= grit_is_metatiled(gr);
+	bool bTile= tileW*tileH > 1;
+
+	// Change things for column-major ordering
+	if(gr->bColMajor)
+	{
+		int lastH= imgH, tmp;
+		if(bBlock)	SWAP3(blockH, lastH, tmp);
+		if(bMeta)	SWAP3(frameH, lastH, tmp);		
+		if(bTile)	SWAP3(tileH, lastH, tmp);
+	}
+
+	// Screen-block redim
+	if(bBlock)
 	{
 		lprintf(LOG_STATUS, "  tiling to 256x256 tiles.\n");
-		dib= dib_redim(gr->_dib, 256, 256, 0);
-		if(dib == NULL)
+		if(!dib_redim(gr->_dib, 256, 256, 0))
 		{
 			lprintf(LOG_ERROR, "  SBB tiling failed.\n");
 			return false;
 		}
-		dib_free(gr->_dib);
-		gr->_dib= dib;
 	}
 
-	int tileW= gr->tileWidth, tileH= gr->tileHeight;
-	int metaW= gr->metaWidth, metaH= gr->metaHeight;
-	int frameW= tileW*metaW, frameH= tileH*metaH;
-
 	// Meta redim
-	if(grit_is_metatiled(gr))
+	if(bMeta)
 	{
 		lprintf(LOG_STATUS, "  tiling to %dx%d tiles.\n", frameW, frameH);
-		dib= dib_redim(gr->_dib, frameW, frameH, 0);
-		if(dib == NULL)
+		if(!dib_redim(gr->_dib, frameW, frameH, 0))
 		{
 			lprintf(LOG_ERROR, "  meta-tiling failed.\n");
 			return false;
 		}
-		dib_free(gr->_dib);
-		gr->_dib= dib;
 	}
 
 	// Tile redim
-	if(tileW*tileH > 1)
+	if(bTile)
 	{
 		lprintf(LOG_STATUS, "  tiling to %dx%d tiles.\n", tileW, tileH);
 
-		dib= dib_redim(gr->_dib, tileW, tileH, 0);
-		if(dib == NULL)
+		if(!dib_redim(gr->_dib, tileW, tileH, 0))
 		{
 			lprintf(LOG_ERROR, "  tiling failed.\n");
 			return false;
 		}
-		dib_free(gr->_dib);
-		gr->_dib= dib;
 	}
 
 	lprintf(LOG_STATUS, "Tile preparation complete.\n");		
@@ -815,7 +820,7 @@ RECORD *grit_meta_reduce(RECORD *dst, const RECORD *src, int tileN, u32 flags)
 			memcpy(&mtsD[mm*tileN], srcL, tileN*2);
 			mm++;			
 		}
-		if(flags & GRIT_META_PAL)	// add metal tile palett info
+		if(flags & GRIT_META_PAL)	// add metal tile palette info
 		{
 			for(jj=0; jj<tileN; jj++)
 			{

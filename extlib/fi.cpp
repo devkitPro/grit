@@ -31,17 +31,17 @@ FIBITMAP *fi_load(const char *fpath)
 }
 
 
-BOOL fi_save(FIBITMAP *fi, const char *fpath)
+bool fi_save(FIBITMAP *fi, const char *fpath)
 {
 	if(fi == NULL)
-		return FALSE;
+		return false;
 
 	FREE_IMAGE_FORMAT fif= FreeImage_GetFIFFromFilename(fpath);
 
 	if( (fif == FIF_UNKNOWN) || !FreeImage_FIFSupportsWriting(fif) )
-		return FALSE;
+		return false;
 
-	return FreeImage_Save(fif, fi, fpath, 0);
+	return FreeImage_Save(fif, fi, fpath, 0)==TRUE;
 }
 
 
@@ -250,16 +250,16 @@ CLDIB *cldib_load(const char *fpath, void *extra)
 	return dib;
 }
 
-BOOL cldib_save(const CLDIB *dib, const char *fpath, void *extra)
+bool cldib_save(const CLDIB *dib, const char *fpath, void *extra)
 {
 	FIBITMAP *fi= dib2fi((CLDIB*)dib);
 
 	if(fi == NULL)
-		return FALSE;
+		return false;
 
 	FreeImage_FlipVertical(fi);
 
-	BOOL res= fi_save(fi, fpath);
+	bool res= fi_save(fi, fpath);
 	FreeImage_Unload(fi);
 
 	return res;	

@@ -15,8 +15,8 @@
 /*!	\{	*/
 
 int dib_get_pbank(CLDIB *dib);
-int dib_set_pbank(CLDIB *dib, int pbank);
-BOOL dib_tilecmp(CLDIB *dib, CLDIB *tileset, int tid, DWORD mask);
+bool dib_set_pbank(CLDIB *dib, int pbank);
+bool dib_tilecmp(CLDIB *dib, CLDIB *tileset, int tid, DWORD mask);
 TMapEntry dib_find(CLDIB *dib, CLDIB *tileset, int tileN, DWORD flags);
 
 
@@ -108,12 +108,12 @@ void tmap_init(TTileMap *tmap, int mapW, int mapH,
 *	\note	\a extTiles is considered a column of tiles, not a matrix. 
 *	  only the first column will be considered.
 */
-BOOL tmap_init_from_dib(TTileMap *tmap, CLDIB *dib, int tileW, int tileH, 
+bool tmap_init_from_dib(TTileMap *tmap, CLDIB *dib, int tileW, int tileH, 
 	DWORD flags, CLDIB *extTiles)
 {
 	//# Safety checks
 	if(tmap==NULL || dib==NULL || tileW<1 || tileH<1)
-		return FALSE;
+		return false;
 
 	//# Set up new tilemap and tileset
 	int dibW, dibH, dibB, dibP;
@@ -122,7 +122,7 @@ BOOL tmap_init_from_dib(TTileMap *tmap, CLDIB *dib, int tileW, int tileH,
 	int mapW= dibW/tileW, mapH= dibH/tileH, mapN= mapW*mapH;
 
 	if(mapW==0 || mapH==0)
-		return FALSE;
+		return false;
 
 	// Init new tileset
 	int rdxN;
@@ -131,10 +131,10 @@ BOOL tmap_init_from_dib(TTileMap *tmap, CLDIB *dib, int tileW, int tileH,
 	if(extTiles)
 	{
 		if(dibB != dib_get_bpp(extTiles))
-			return FALSE;
+			return false;
 
 		rdxN= dib_get_height(extTiles)/tileH;
-		rdx= dib_copy(extTiles, 0, 0, tileW, (mapN+rdxN)*tileH, FALSE);
+		rdx= dib_copy(extTiles, 0, 0, tileW, (mapN+rdxN)*tileH, false);
 	}
 	else
 	{
@@ -145,12 +145,12 @@ BOOL tmap_init_from_dib(TTileMap *tmap, CLDIB *dib, int tileW, int tileH,
 	}
 
 	if(rdx == NULL)
-		return FALSE;
+		return false;
 
 	TMapEntry *mapD= (TMapEntry*)malloc(mapW*mapH*sizeof(TMapEntry)), me;
 
 	// Create temporary tile for comparisons
-	CLDIB *tmpDib= dib_copy(dib, 0, 0, tileW, tileH, FALSE);
+	CLDIB *tmpDib= dib_copy(dib, 0, 0, tileW, tileH, false);
 	int tmpP= dib_get_pitch(tmpDib);	
 	BYTE *tmpD= dib_get_img(tmpDib);
 	
@@ -180,7 +180,7 @@ BOOL tmap_init_from_dib(TTileMap *tmap, CLDIB *dib, int tileW, int tileH,
 
 	// Shrink tileset
 	dib_free(tmpDib);
-	tmpDib= dib_copy(rdx, 0, 0, tileW, rdxN*tileH, FALSE);
+	tmpDib= dib_copy(rdx, 0, 0, tileW, rdxN*tileH, false);
 	dib_free(rdx);
 
 	// Attach map and tileset to tmap
@@ -195,7 +195,7 @@ BOOL tmap_init_from_dib(TTileMap *tmap, CLDIB *dib, int tileW, int tileH,
 	tmap->tiles= tmpDib;
 	tmap->flags= flags;
 
-	return TRUE;
+	return true;
 }
 
 //! Render a tilemap to a DIB (8, 16, 24, 32).
@@ -247,7 +247,7 @@ CLDIB *tmap_render(TTileMap *tmap, const RECT *rect)
 	dibP= dib_get_pitch(dib);
 
 	// Temp tile dib
-	CLDIB *tmpDib= dib_copy(tileDib, 0, 0, tileW, tileH, FALSE);
+	CLDIB *tmpDib= dib_copy(tileDib, 0, 0, tileW, tileH, false);
 	BYTE *tmpD= dib_get_img(tmpDib);
 
 	for(ty=0; ty<mapH; ty++)
@@ -310,12 +310,12 @@ int dib_get_pbank(CLDIB *dib)
 //! Find the palette-bank for a DIB.
 /*!	\note	For 8bpp only.
 */
-BOOL dib_set_pbank(CLDIB *dib, int pbank)
+bool dib_set_pbank(CLDIB *dib, int pbank)
 {
 	int dibW, dibH, dibB, dibP;
 	dib_get_attr(dib, &dibW, &dibH, &dibB, &dibP);
 	if(dibB != 8)
-		return FALSE;
+		return false;
 
 	int ix, iy;
 	BYTE *dibD= dib_get_img(dib);
@@ -326,7 +326,7 @@ BOOL dib_set_pbank(CLDIB *dib, int pbank)
 		for(ix=0; ix<dibW; ix++)
 			dibD[iy*dibP+ix]= (dibD[iy*dibP+ix]&15) | pbank;
 
-	return TRUE;
+	return true;
 }
 
 
@@ -335,7 +335,7 @@ BOOL dib_set_pbank(CLDIB *dib, int pbank)
 *	  with \a tileset, there will be trouble. YHBW.
 *	\note	PONDER: Endian effects???
 */
-BOOL dib_tilecmp(CLDIB *dib, CLDIB *tileset, int tid, DWORD mask)
+bool dib_tilecmp(CLDIB *dib, CLDIB *tileset, int tid, DWORD mask)
 {
 	int tileW, tileH, tileB, tileP;
 	dib_get_attr(dib, &tileW, &tileH, &tileB, &tileP);
@@ -356,14 +356,14 @@ BOOL dib_tilecmp(CLDIB *dib, CLDIB *tileset, int tid, DWORD mask)
 		{
 			for(ix=0; ix<tileW; ix += nb)
 				if( (dibL[ix]&mask) != (tileL[ix]&mask) )
-					return FALSE;
+					return false;
 				
 			dibL += tileP;
 			tileL += tileP;
 		}
 		mask >>= 8;
 	}
-	return TRUE;
+	return true;
 	
 }
 

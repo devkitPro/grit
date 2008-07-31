@@ -48,7 +48,7 @@ void test_quant()
 	if(src==NULL)
 		return;
 	
-	dst= dib_true_to_8(src, 64);
+	dst= dib_true_to_8_copy(src, 64);
 	BmpSave("bastion8.bmp", dst);
 
 	dib_free(dst);
@@ -61,7 +61,7 @@ void test_tga()
 
 	//TgaSave("tiles8.tga", dibTiles);
 
-	dib= dib_convert(dibTiles, 24, 0);
+	dib= dib_convert_copy(dibTiles, 24, 0);
 	TgaSave("tiles24.tga", dib);
 	dib_free(dib);
 }
@@ -72,7 +72,7 @@ void test_png()
 
 	PngSave("tiles8.png", dibTiles);
 
-	dib= dib_convert(dibTiles, 4, 0);
+	dib= dib_convert_copy(dibTiles, 4, 0);
 	PngSave("tiles4.png", dib);
 	dib_free(dib);
 }
@@ -84,7 +84,7 @@ void test_pcx()
 
 	PcxSave("tiles8.pcx", dibTiles);
 
-	dib= dib_convert(dibTiles, 4, 0);
+	dib= dib_convert_copy(dibTiles, 4, 0);
 	PcxSave("tiles4.pcx", dib);
 	dib_free(dib);
 }
@@ -94,25 +94,25 @@ void test_redim()
 	CLDIB *dib=NULL, *dib2=NULL;
 	CBmpFile bmp;
 
-	dib= dib_redim(dibTiles, 8, 8, 0);
+	dib= dib_redim_copy(dibTiles, 8, 8, 0);
 	bmp.Attach(dib);
 	bmp.Save("tiles_rd8.bmp");
 	bmp.Destroy();
 
-	dib= dib_redim(dibTiles, 16, 16, 0);
+	dib= dib_redim_copy(dibTiles, 16, 16, 0);
 	bmp.Attach(dib);
 	bmp.Save("tiles_rd16.bmp");
 	bmp.Destroy();
 
-	dib= dib_redim(dibTiles, 16, 16, 0);
-	dib2= dib_redim(dib, 8, 8, 0);
+	dib= dib_redim_copy(dibTiles, 16, 16, 0);
+	dib2= dib_redim_copy(dib, 8, 8, 0);
 	bmp.Attach(dib2);
 	bmp.Save("tiles_rd16_8.bmp");
 	bmp.Destroy();
 	dib_free(dib);
 
-	dib= dib_redim(dibTiles, 8, 8, 0);
-	dib2= dib_redim(dib, 32, 8, 0);
+	dib= dib_redim_copy(dibTiles, 8, 8, 0);
+	dib2= dib_redim_copy(dib, 32, 8, 0);
 	bmp.Attach(dib2);
 	bmp.Save("tiles_rd_inv.bmp");
 	bmp.Destroy();
@@ -126,18 +126,18 @@ void test_copy()
 {
 	CLDIB *dib=NULL, *dib2=NULL;
 
-	dib= dib_copy(dibTiles, 0, 0, 16, 16, TRUE);
+	dib= dib_copy(dibTiles, 0, 0, 16, 16, true);
 	dib_save_bmp("tiles0-0-16-16.bmp", dib);
 	dib_free(dib);
 
 
-	dib= dib_copy(dibTiles, -8, -8, 64+8, 16+8, FALSE);
+	dib= dib_copy(dibTiles, -8, -8, 64+8, 16+8, false);
 	dib_save_bmp("tilesn8-n8-72-24.bmp", dib);
 	dib_free(dib);	
 
 	
 	dib2= dib_convert(dibTiles, 4, 0);
-	dib= dib_copy(dib2, 3, 8, 16, 15, TRUE);
+	dib= dib_copy(dib2, 3, 8, 16, 15, true);
 	dib_save_bmp("tiles3-8-16-15.bmp", dib);
 	dib_free(dib2);	
 	dib_free(dib);	

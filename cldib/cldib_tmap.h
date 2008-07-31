@@ -101,7 +101,7 @@ CLDIB *tmap_attach(TTileMap *tmap, CLDIB *dib);
 
 void tmap_init(TTileMap *tmap, int mapW, int mapH, 
 	int tileW, int tileH, DWORD flags);
-BOOL tmap_init_from_dib(TTileMap *tmap, CLDIB *dib, int tileW, int tileH, 
+bool tmap_init_from_dib(TTileMap *tmap, CLDIB *dib, int tileW, int tileH, 
 	DWORD flags, CLDIB *extTiles);
 
 CLDIB *tmap_render(TTileMap *tmap, const RECT *rect);

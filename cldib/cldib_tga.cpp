@@ -29,10 +29,10 @@ const char *CTgaFile::sMsgs[]=
 
 // TGA types
 #define TGA_PAL         1
-#define TGA_TRUE        2
+#define TGA_true        2
 #define TGA_BW          3
 #define TGA_PAL_RLE     9
-#define TGA_TRUE_RLE   10
+#define TGA_true_RLE   10
 #define TGA_BW_RLE     11
 
 //#define TGA_HFLIP 0x10
@@ -96,7 +96,7 @@ typedef struct tagTGA_BGRA
 // === PROTOTYPES =====================================================
 
 // --- read
-static BOOL tga_read_pal(CLDIB *dib, const TGAHDR *hdr, FILE *fp);
+static bool tga_read_pal(CLDIB *dib, const TGAHDR *hdr, FILE *fp);
 static void tga_unrle(CLDIB *dib, TGAHDR *hdr, FILE *fp);
 
 // === FUNCTIONS ======================================================
@@ -112,7 +112,7 @@ CTgaFile &CTgaFile::operator=(const CTgaFile &rhs)
 }
 
 // xxx_load(const char *fname, PDIBDATA *ppdib, IMG_FMT_INFO *pifi)
-CTgaFile::Load(const char *fpath)
+bool CTgaFile::Load(const char *fpath)
 {
 	FILE *fp= fopen(fpath, "rb");
 	CLDIB *dib= NULL;
@@ -135,7 +135,7 @@ CTgaFile::Load(const char *fpath)
 		imgP= dib_align(imgW, imgB);
 
 		// Set-up the full bitmap
-		dib= dib_alloc(imgW, imgH, imgB, NULL, TRUE);
+		dib= dib_alloc(imgW, imgH, imgB, NULL, true);
 		if(dib == NULL)
 			throw CImgFile::sMsgs[ERR_ALLOC];
 
@@ -154,13 +154,13 @@ CTgaFile::Load(const char *fpath)
 		{
 		case TGA_BW:
 		case TGA_PAL:
-		case TGA_TRUE:
+		case TGA_true:
 			for(ii=0; ii<imgH; ii++)
 				fread(&imgD[ii*imgP], 1, tgaP, fp);
 			break;
 		case TGA_BW_RLE:
 		case TGA_PAL_RLE:
-		case TGA_TRUE_RLE:
+		case TGA_true_RLE:
 			tga_unrle(dib, &hdr, fp);
 			break;
 		default:
@@ -180,7 +180,7 @@ CTgaFile::Load(const char *fpath)
 	}
 	// cleanup
 	if(!dib)
-		return FALSE;
+		return false;
 
 	// if we're here we've succeeded
 	SetMsg(CImgFile::sMsgs[ERR_NONE]);
@@ -189,16 +189,16 @@ CTgaFile::Load(const char *fpath)
 	SetBpp(dib_get_bpp(dib));
 	SetPath(fpath);
 
-	return TRUE;
+	return true;
 }
 
 
-BOOL CTgaFile::Save(const char *fpath)
+bool CTgaFile::Save(const char *fpath)
 {
 
 	int ii, iy;
 	FILE *fp= NULL;
-	BOOL bOK= TRUE;
+	bool bOK= true;
 
 	try
 	{
@@ -223,7 +223,7 @@ BOOL CTgaFile::Save(const char *fpath)
 		else if(imgB <= 8)
 			hdr.type= TGA_PAL;
 		else
-			hdr.type= TGA_TRUE;
+			hdr.type= TGA_true;
 
 		if(imgB<=8)		// paletted
 		{
@@ -265,7 +265,7 @@ BOOL CTgaFile::Save(const char *fpath)
 	catch(const char *msg)
 	{
 		SetMsg(msg);
-		bOK= FALSE;
+		bOK= false;
 	}
 
 	if(fp)
@@ -275,18 +275,18 @@ BOOL CTgaFile::Save(const char *fpath)
 }
 
 // === LOAD HELPERS ===================================================
-static BOOL tga_read_pal(CLDIB *dib, const TGAHDR *hdr, 
+static bool tga_read_pal(CLDIB *dib, const TGAHDR *hdr, 
 	FILE *fp)
 {
 	// no palette, 's fair
 	if(hdr->has_table == 0)
-		return TRUE;
+		return true;
 	// writer of this file is an idiot
 	// PONDER: is pal_len the size of the whole thing, or
 	//   counting from pal_start?
 	//   I'm assuming the latter
 	if(hdr->pal_len <= hdr->pal_start)
-		return FALSE;
+		return false;
 
 	int ii;
 	int clrS= (hdr->pal_bpp != 15 ? (hdr->pal_bpp/8) : 2);
@@ -332,12 +332,12 @@ static BOOL tga_read_pal(CLDIB *dib, const TGAHDR *hdr,
 		break;
 	default:
 		SAFE_FREE(palD);
-		return FALSE;
+		return false;
 	}
 
 	// clean up
 	SAFE_FREE(palD);
-	return TRUE;
+	return true;
 }
 
 // TGA RLE;

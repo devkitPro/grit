@@ -1,5 +1,5 @@
-GRIT_VERSION	:=	0.8
-GRIT_BUILD		:=	20080304
+GRIT_VERSION	:=	0.8.1
+GRIT_BUILD		:=	20080512
 
 CPPFLAGS	:=	-g -O3 -Icldib -Ilibgit
 CPPFLAGS	+=	-DGRIT_VERSION=\"$(GRIT_VERSION)\" -DGRIT_BUILD=\"$(GRIT_BUILD)\"
@@ -10,8 +10,6 @@ LDFLAGS		:=	-g
 # ---------------------------------------------------------------------
 
 UNAME	:=	$(shell uname -s)
-
-PREFIX	?=	$(DEVKITARM)/bin
 
 ifneq (,$(findstring MINGW,$(UNAME)))
 	OS	:=	win32
@@ -97,7 +95,7 @@ DEPENDS		:=	$(GRIT_OBJ:.o=.d) $(LIBCLDIB_OBJ:.o=.d) $(LIBGRIT_OBJ:.o=.d)
 
 SRCDIRS	:= $(CLDIB_DIR) $(LIBGRIT_DIR) $(GRIT_DIR) $(EXTLIB_DIR)
 INCDIRS	:= $(CLDIB_DIR) $(LIBGRIT_DIR) $(EXTLIB_DIR)
-LIBDIRS	:= . $(EXTLIB_DIR)
+LIBDIRS	:= .
 
 INCLUDE		:= $(foreach dir, $(INCDIRS), -I$(dir))
 LIBPATHS	:= $(foreach dir, $(LIBDIRS), -L$(dir))

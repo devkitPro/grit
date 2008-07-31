@@ -44,7 +44,7 @@ void CImgFile::Clear()
 	mDib= NULL;
 	mBpp= 8;
 	SAFE_FREE(mPath);
-	mbActive= FALSE;
+	mbActive= false;
 }
 
 void CImgFile::Destroy()
@@ -64,7 +64,7 @@ CLDIB *CImgFile::Detach()
 {
 	CLDIB *dib= mDib;
 	mDib= NULL;
-	mbActive= FALSE;
+	mbActive= false;
 	return dib;
 }
 
@@ -72,7 +72,7 @@ CLDIB *CImgFile::Attach(CLDIB *dib)
 {
 	CLDIB *prev= mDib;
 	mDib= dib;
-	mbActive= dib ? TRUE : FALSE;
+	mbActive= dib ? true : false;
 	return prev;
 }
 

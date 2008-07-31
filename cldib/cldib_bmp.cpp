@@ -32,7 +32,7 @@ CBmpFile &CBmpFile::operator=(const CBmpFile &rhs)
 
 // Yes, you can use LoadImage too, but that creates a device 
 // dependent bitmap and you want to stay the fsck away from those.
-BOOL CBmpFile::Load(const char *fpath)
+bool CBmpFile::Load(const char *fpath)
 {
 	FILE *fp= fopen(fpath, "rb");
 	CLDIB *dib= NULL;
@@ -50,7 +50,7 @@ BOOL CBmpFile::Load(const char *fpath)
 			throw CImgFile::sMsgs[ERR_FORMAT];
 
 		BITMAPINFOHEADER bmih;
-		BOOL bCore;
+		bool bCore;
 
 		// check for bm version first :(
 		fread(&bmih, 4, 1, fp);
@@ -89,7 +89,7 @@ BOOL CBmpFile::Load(const char *fpath)
 			bmih.biClrUsed= 1<<bmih.biBitCount;
 
 		// now we set-up the full bitmap
-		dib= dib_alloc(bmih.biWidth, dibHa, bmih.biBitCount, NULL, TRUE);
+		dib= dib_alloc(bmih.biWidth, dibHa, bmih.biBitCount, NULL, true);
 		if(dib == NULL)
 			throw CImgFile::sMsgs[ERR_ALLOC];
 
@@ -111,7 +111,7 @@ BOOL CBmpFile::Load(const char *fpath)
 	if(fp)
 		fclose(fp);
 	if(!dib)
-		return FALSE;
+		return false;
 
 	// if we're here we've succeeded
 	SetMsg(CImgFile::sMsgs[ERR_NONE]);
@@ -120,13 +120,13 @@ BOOL CBmpFile::Load(const char *fpath)
 	SetBpp(dib_get_bpp(dib));
 	SetPath(fpath);
 
-	return TRUE;
+	return true;
 }
 
-BOOL CBmpFile::Save(const char *fpath)
+bool CBmpFile::Save(const char *fpath)
 {
 	FILE *fp= NULL;
-	BOOL bOK= TRUE;;
+	bool bOK= true;;
 
 	try
 	{
@@ -171,7 +171,7 @@ BOOL CBmpFile::Save(const char *fpath)
 	catch(const char *msg)
 	{
 		SetMsg(msg);
-		bOK= FALSE;
+		bOK= false;
 	}
 
 	if(fp)
