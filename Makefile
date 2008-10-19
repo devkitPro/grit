@@ -29,6 +29,9 @@ endif
 
 ifneq (,$(findstring Darwin,$(UNAME)))
 	OS	:=	OSX
+	CFLAGS	+=	-mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk
+	ARCH	:=	-arch i386 -arch ppc
+	LDFLAGS	+=	$(ARCH)
 else
 	LDFLAGS += -s
 endif
@@ -141,7 +144,8 @@ dist-bin: all
 dist: dist-src dist-bin
 
 build/%.o	:	%.cpp
-	$(CXX) -MMD -MP -MF build/$*.d $(CPPFLAGS) -c $< -o $@
+	$(CXX) -E -MMD -MP -MF build/$*.d $(CPPFLAGS) $< > /dev/null 
+	$(CXX)  $(CPPFLAGS) $(ARCH) -c $< -o $@
 
 %.a	:
 	rm -f $@
