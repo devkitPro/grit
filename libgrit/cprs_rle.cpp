@@ -129,12 +129,12 @@ uint rle8gba_decompress(RECORD *dst, const RECORD *src)
 
 		if(header&0x80)		// compressed stint
 		{
-			size= min( (header&~0x80)+3, dstS-ii);
+			size= MIN( (header&~0x80)+3, dstS-ii);
 			memset(&dstD[ii], *srcL++, size);
 		}
 		else				// noncompressed stint
 		{
-			size= min(header+1, dstS-ii);
+			size= MIN(header+1, dstS-ii);
 			memcpy(&dstD[ii], srcL, size);
 			srcL += size;
 		}
