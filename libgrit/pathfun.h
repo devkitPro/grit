@@ -91,6 +91,7 @@ char *strupr(char *str);
 
 bool file_exists(const char *fpath);
 long file_size(const char *fpath);
+long file_size(FILE *fp);
 
 long file_copy(FILE *fout, FILE *fin, long size);
 long file_find_tag(FILE *fout, FILE *fin, const char *tag);

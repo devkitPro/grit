@@ -176,12 +176,22 @@ enum EScreenFlags
 enum eTypes
 {	E_U8=1, E_U16=2, E_U32=4	};
 
+//! Indices for affix strings
 enum eAffix
-{	E_PAL=0, E_TILE=1, E_BM=2, E_MAP=3, E_META=4, E_GRF=5, 	};
+{	
+	E_AFX_TILE	=0,		//!< Tiled graphics
+	E_AFX_BMP	,		//!< Bitmap graphics
+	E_AFX_MAP	,		//!< Tilemap
+	E_AFX_PAL	,		//!< Palette
+	E_AFX_MTILE	,		//!< Meta-tiles
+	E_AFX_MMAP	,		//!< Metamap
+	E_AFX_GRF	,		//!< GRIF format
+	E_AFX_MAX
+};
 
 extern const char *cFileTypes[GRIT_FTYPE_MAX];
-extern const char *cAffix[6];
 extern const char *cTypes[3];
+extern const char *cAffix[E_AFX_MAX];
 extern const char *cCprs[GRIT_CPRS_MAX];
 
 

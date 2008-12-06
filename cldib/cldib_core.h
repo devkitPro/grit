@@ -63,20 +63,33 @@
 	do { (tmp)=(b); (b)=(a); (a)=(tmp);	} while(0)
 
 
-// --- utility macros ---
-
 INLINE unsigned int align(unsigned int x, unsigned int size);
 INLINE int clamp(int x, int min, int max);
 INLINE int reflect(int x, int min, int max);
 INLINE int wrap(int x, int min, int max);
 
-/*!	\}	*/
 
+//! \name Little endian data read/write
+//\{
+INLINE DWORD read16le(const BYTE *src);
+INLINE DWORD read32le(const BYTE *src);
+INLINE void write16le(BYTE *dst, WORD src);
+INLINE void write32le(BYTE *dst, DWORD src);
+//\}
+
+//! \name big-endian read/write
+//\{
+INLINE DWORD read16be(const BYTE *src);
+INLINE DWORD read32be(const BYTE *src);
+INLINE void write16be(BYTE *dst, WORD src);
+INLINE void write32be(BYTE *dst, DWORD src);
+//\}
+
+/*!	\)	*/
 
 // --------------------------------------------------------------------
 // CONSTANTS
 // --------------------------------------------------------------------
-
 
 
 /*! \addtogroup grpColor
@@ -141,6 +154,7 @@ typedef struct RECORD
 	BYTE *data;		//!< Binary data.
 } RECORD;
 
+
 //! Return full size of \a rec in bytes.
 INLINE int rec_size(const RECORD *rec)
 { return rec->width*rec->height;	}
@@ -152,6 +166,14 @@ INLINE int rec_size(const RECORD *rec)
 INLINE RECORD *rec_alias(RECORD *dst, const RECORD *src)
 {	free(dst->data); *dst= *src; return dst;	}
 
+//! Attach new data to the current record.
+INLINE void rec_attach(RECORD *dst, const void *data, int width, int height)
+{
+	free(dst->data);
+	dst->width= width;
+	dst->height= height;
+	dst->data= (BYTE*)data;
+}
 
 /*!	\}	*/
 
@@ -166,8 +188,7 @@ INLINE RECORD *rec_alias(RECORD *dst, const RECORD *src)
 // --------------------------------------------------------------------
 
 /*! \addtogroup grpMisc
-
-*	\{
+	\{
 */
 //! Create standard declaration for loading \a _type images.
 #define LOAD_DECL(_type) \
@@ -198,7 +219,7 @@ bool dib_save_##_type##(const char *fpath, CLDIB *dib)
 // --------------------------------------------------------------------
 
 /*! \addtogroup grpColor
-*	\{
+	\{
 */
 
 CLDIB *dib_swap_rgb(CLDIB *dib);
@@ -216,7 +237,7 @@ INLINE RGBQUAD swap_rgb32(RGBQUAD clr);
 
 
 /*! \addtogroup grpDibMain
-*	\{
+	\{
 */
 
 INLINE int dib_align(int width, int bpp);	// align to 32bit boundary
@@ -263,6 +284,7 @@ CLDIB *dib_clone(CLDIB *src);
 bool dib_mov(CLDIB *dst, CLDIB *src);
 INLINE RGBQUAD *dib_pal_cpy(CLDIB *dst, CLDIB *src);
 CLDIB *dib_copy(CLDIB *src, int ll, int tt, int rr, int bb, bool bClip);
+bool dib_paste(CLDIB *dst, CLDIB *src, int dstX, int dstY);
 
 bool dib_hflip(CLDIB *dib);
 bool dib_vflip(CLDIB *dib);		// turns lines, but h >0
@@ -287,7 +309,6 @@ int hbm_blit(HDC hdc, int dX, int dY, int dW, int dH,
 // \}
 
 #endif	// _MSC_VER
-
 
 /*!	\}	*/
 
@@ -323,6 +344,41 @@ INLINE int reflect(int x, int min, int max)
 //! Wraps \a x to stay in range [\a min, \a max>
 INLINE int wrap(int x, int min, int max)
 {	return (x>=max) ? (x+min-max)	: ( (x<min) ? (x+max-min) : x );	}
+
+
+//! Read a little-endian 16bit number.
+INLINE DWORD read16le(const BYTE *src)
+{	return src[0] | src[1]<<8;										}
+
+//! Read a little-endian 32bit number.
+INLINE DWORD read32le(const BYTE *src)
+{	return src[0] | src[1]<<8 | src[2]<<16 | src[3]<<24;			}
+
+//! Write a little-endian 16bit number.
+INLINE void write16le(BYTE *dst, WORD src)
+{	dst[0]=BYTE(src);	dst[1]=BYTE(src>>8);						}
+
+//! Write a little-endian 32bit number.
+INLINE void write32le(BYTE *dst, DWORD src)
+{	write16le(dst, WORD(src));	write16le(dst+2, WORD(src>>16));	}
+
+
+//! Read a big-endian 16bit number.
+INLINE DWORD read16be(const BYTE *src)
+{	return src[0]<<8 | src[1];										}
+
+//! Read a big-endian 32bit number.
+INLINE DWORD read32be(const BYTE *src)
+{	return src[0]<<24 | src[1]<<16 | src[2]<<8 | src[3];			}
+
+//! Write a big-endian 16bit number.
+INLINE void write16be(BYTE *dst, WORD src)
+{	dst[0]=BYTE(src>>8);	dst[1]=BYTE(src);						}
+
+//! Write a big-endian 32bit number.
+INLINE void write32be(BYTE *dst, DWORD src)
+{	write16be(dst, WORD(src>>16));	write16be(dst+2, WORD(src));	}
+
 
 
 // === 

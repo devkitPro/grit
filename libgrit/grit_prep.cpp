@@ -491,10 +491,7 @@ bool grit_prep_map(GritRec *gr)
 			size /= 2;
 			for(ii=0; ii<size; ii++)
 				buf[ii]= (BYTE)mapD[ii];
-			free(mapRec.data);
-			mapRec.data= buf;
-			mapRec.width= 1;
-			mapRec.height= size;
+			rec_attach(&mapRec, buf, 1, size);
 		}
 	}
 	if( BYTE_ORDER == BIG_ENDIAN && gr->mapLayout != GRIT_MAP_AFFINE )
@@ -696,10 +693,7 @@ CLDIB *grit_tile_reduce(RECORD *dst, CLDIB *srcDib, u32 flags, CLDIB *extDib)
 	}
 
 	int mapS= 2*srcN;
-	free(dst->data);
-	dst->width= 2;
-	dst->height= srcN;
-	dst->data= (BYTE*)malloc(mapS);
+	rec_attach(dst, (BYTE*)malloc(mapS), 2, srcN);
 	if(dst->data == NULL)
 	{
 		lprintf(LOG_ERROR, "Can't allocate map buffer.\n");		
@@ -834,10 +828,7 @@ RECORD *grit_meta_reduce(RECORD *dst, const RECORD *src, int tileN, u32 flags)
 	}
 
 	// attach metamap
-	dst->width= 2;
-	dst->height= dstN;
-	free(dst->data);
-	dst->data= (BYTE*)dstD;
+	rec_attach(dst, dstD, 2, dstN);
 
 	// create metatile record
 	int mtsS= 2*mm*tileN;

@@ -1,15 +1,17 @@
 //
 // pathfun.cpp
 //   Path/file functions
-// (20050826 - 20071121, cearn)
+// (20050826 - 20081128, cearn)
 //
-// === NOTES === 
-// * 20070401, jv:
-//   - added path_repl_ext
-//   - TODO: doxygenate
-//   - TODO: more consistency in code
-// * 20061121: added strtrim(), file_copy() and file_find_tag()
-// * 20061010, PONDER: rename to filefun?
+/* === NOTES === 
+  * 20081128,jv: xp_array_c now adds a GCC alignment attribute.
+  * 20070401, jv:
+	- added path_repl_ext
+	- TODO: doxygenate
+	- TODO: more consistency in code
+  * 20061121: added strtrim(), file_copy() and file_find_tag()
+  * 20061010, PONDER: rename to filefun?
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -522,6 +524,19 @@ long file_size(const char *fpath)
 	return pos;
 }
 
+long file_size(FILE *fp)
+{
+	if(fp==NULL)
+		return 0;
+
+	long tmp= ftell(fp);
+	fseek(fp, 0, SEEK_END);
+	long pos= ftell(fp);
+	fseek(fp, tmp, SEEK_SET);
+
+	return pos;
+}
+
 
 //! Copy \a size unsigned chars from \a fin to \a fout.
 /*!	\param fout	Destination file handle.
@@ -673,7 +688,7 @@ bool xp_array_c(FILE *fp, const char *symname,
 		return false;
 
 	// NOTE: no EOL break
-	fprintf(fp, "const unsigned %s %s[%d]=\n{", 
+	fprintf(fp, "const unsigned %s %s[%d] __attribute__((aligned(4)))=\n{", 
 		cCTypes[chunk], symname, ALIGN4(len)/chunk);
 	
 	xp_data_c(fp, data, len, chunk);

@@ -25,7 +25,7 @@
 //! Compression type tags.
 enum ECprsTag
 {
-	CPRS_NONE_TAG	= 0x00,		//<! No compression.
+	CPRS_FAKE_TAG	= 0x00,		//<! No compression.
 	CPRS_LZ77_TAG	= 0x10,		//<! GBA LZ77 compression.
 	CPRS_HUFF_TAG	= 0x20, 
 //	CPRS_HUFF4_TAG	= 0x24,		//<! GBA Huffman, 4bit.
@@ -46,17 +46,22 @@ typedef bool (*cprs_proc_t)(RECORD *dst, const RECORD *src);
 u32	cprs_create_header(uint size, u8 tag); 
 
 bool cprs_compress(RECORD *dst, const RECORD *src, ECprsTag tag);
-//bool cprs_decompress(RECORD *dst, const RECORD *src, ECprsTag tag);
+bool cprs_decompress(RECORD *dst, const RECORD *src);
 
 
-uint cprs_none(RECORD *dst, const RECORD *src);
+uint fake_compress(RECORD *dst, const RECORD *src);
+uint fake_decompress(RECORD *dst, const RECORD *src);
 
-uint cprs_gba_lz77(RECORD *dst, const RECORD *src);
-//uint cprs_gba_huf4(RECORD *dst, const RECORD *src);
-uint cprs_gba_huf8(RECORD *dst, const RECORD *src);
-uint cprs_gba_rle8(RECORD *dst, const RECORD *src);
+uint lz77gba_compress(RECORD *dst, const RECORD *src);
+uint lz77gba_decompress(RECORD *dst, const RECORD *src);
 
-uint cprs_gba_huff(RECORD *dst, const RECORD *src, int srcB);
+uint huffgba_compress(RECORD *dst, const RECORD *src, int srcB);
+//uint huf4gba_compress(RECORD *dst, const RECORD *src);
+uint huf8gba_compress(RECORD *dst, const RECORD *src);
+
+uint rle8gba_compress(RECORD *dst, const RECORD *src);
+uint rle8gba_decompress(RECORD *dst, const RECORD *src);
+
 
 
 // --------------------------------------------------------------------

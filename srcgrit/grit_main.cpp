@@ -57,11 +57,11 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre);
 // --------------------------------------------------------------------
 
 #ifndef GRIT_VERSION
-#define GRIT_VERSION	"0.8.1"
+#define GRIT_VERSION	"0.8.2"
 #endif
 
 #ifndef GRIT_BUILD
-#define GRIT_BUILD		"20080512"
+#define GRIT_BUILD		"20081129"
 #endif
 
 // --- Application constants ---

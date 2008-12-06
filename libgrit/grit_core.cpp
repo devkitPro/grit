@@ -32,9 +32,15 @@ static const char __grit_app_string[]=
 
 
 const char *cFileTypes[GRIT_FTYPE_MAX]= {"c", "s", "bin", "gbfs", "grf" /*, "o"*/};
-const char *cAffix[6]= { "Pal", "Tiles", "Bitmap", "Map", "MetaMap", "Grf" };
-const char *cTypes[3]= { "u8", "u16", "u32" };
 const char *cCprs[GRIT_CPRS_MAX]= { "not", "lz77", "huf", "rle", "fake" };
+const char *cTypes[3]= { "u8", "u16", "u32" };
+const char *cAffix[E_AFX_MAX]= 
+{
+	"Tiles", "Bitmap", 
+	"Map", "Pal", 
+	"MetaTiles", "MetaMap",
+	"Grf"
+};
 
 
 // --------------------------------------------------------------------
@@ -364,7 +370,7 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre)
 	{
 		fputs(pre, fp);
 		fprintf(fp, "%s%s : %s cprs, %s, [%d,%d>\n", 
-			gr->symName, cAffix[E_PAL],
+			gr->symName, cAffix[E_AFX_PAL],
 			cCprs[gr->palCompression], cTypes[gr->palDataType], 
 			gr->palStart, gr->palEnd);
 	}
@@ -373,7 +379,7 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre)
 	{
 		fputs(pre, fp);
 		fprintf(fp, "%s%s : %s cprs, %s, %dbpp, +%d\n", 
-			gr->symName, cAffix[gr->gfxMode ? E_BM : E_TILE],
+			gr->symName, cAffix[grit_is_bmp(gr) ? E_AFX_BMP : E_AFX_TILE],
 			cCprs[gr->gfxCompression], cTypes[gr->gfxDataType], 
 			gr->gfxBpp, gr->gfxOffset);
 	}
@@ -382,7 +388,8 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre)
 	{
 		fputs(pre, fp);
 		fprintf(fp, "%s%s : %s cprs, %s, ", 
-			gr->symName, cAffix[E_MAP],
+			gr->symName, 
+			cAffix[grit_is_metatiled(gr) ? E_AFX_MTILE :  E_AFX_MAP],
 			cCprs[gr->mapCompression], cTypes[gr->mapDataType]);
 		if(gr->mapRedux)
 		{
@@ -598,7 +605,8 @@ bool grit_validate(GritRec *gr)
 		break;
 	case 16: case 24: case 32:
 		gr->gfxBpp= 16;
-		// gr->gfxMode= GRIT_GFX_BMP;		// Set to bitmap
+		if(gr->gfxMode==GRIT_GFX_TILE)
+			gr->gfxMode= GRIT_GFX_BMP;		// Set to bitmap
 
 		gr->mapProcMode= GRIT_EXCLUDE;	// No map. REPONDER
 		gr->palProcMode= GRIT_EXCLUDE;	// No pal either.

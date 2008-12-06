@@ -104,7 +104,7 @@ static void huff_table_fill(int id, int tier)
 }
 
 //! Main Huffman routine
-uint cprs_gba_huff(RECORD *dst, const RECORD *src, int srcB)
+uint huffgba_compress(RECORD *dst, const RECORD *src, int srcB)
 {
 	if(dst==NULL || src==NULL || src->data==NULL)
 		return 0;

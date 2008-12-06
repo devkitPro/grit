@@ -47,8 +47,8 @@ bool grit_compress(RECORD *dst, const RECORD *src, uint mode)
 	}
 	else if(mode < GRIT_CPRS_MAX)
 	{
-		const ECprsTag tags[5]= { CPRS_NONE_TAG, 
-			CPRS_LZ77_TAG, CPRS_HUFF8_TAG, CPRS_RLE_TAG, CPRS_NONE_TAG 
+		const ECprsTag tags[5]= { CPRS_FAKE_TAG, 
+			CPRS_LZ77_TAG, CPRS_HUFF8_TAG, CPRS_RLE_TAG, CPRS_FAKE_TAG 
 		};
 
 		lprintf(LOG_STATUS, "Compressing: %02x\n", mode, tags[mode]);

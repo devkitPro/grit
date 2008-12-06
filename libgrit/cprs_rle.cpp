@@ -8,6 +8,7 @@
 
 #include <stdlib.h>
 #include <memory.h>
+#include <assert.h>
 
 #include "cprs.h"
 
@@ -20,7 +21,7 @@
 //! Compression routine for GBA RLE
 /*!
 */
-uint cprs_gba_rle8(RECORD *dst, const RECORD *src)
+uint rle8gba_compress(RECORD *dst, const RECORD *src)
 {
 	if(src==NULL || dst==NULL || src->data == NULL)
 		return 0;
@@ -99,14 +100,47 @@ uint cprs_gba_rle8(RECORD *dst, const RECORD *src)
 
 	*(u32*)dstL= cprs_create_header(srcS, CPRS_RLE_TAG);
 	memcpy(dstL+4, dstD, dstS-4);
-
-	free(dst->data);	
-	dst->width= 1;
-	dst->height= dstS;
-	dst->data= dstL;
+	rec_attach(dst, dstL, 1, dstS);
 
 	free(dstD);
 
+	return dstS;
+}
+
+
+uint rle8gba_decompress(RECORD *dst, const RECORD *src)
+{
+	assert(dst && src && src->data);
+	if(dst==NULL || src==NULL || src->data==NULL)
+		return 0;
+
+	// Get and check header word
+	u32 header= read32le(src->data);
+	if((header&255) != CPRS_RLE_TAG)
+		return 0;
+
+	uint ii, dstS= header>>8, size=0;
+	u8 *srcL= src->data+4, *dstD= (BYTE*)malloc(dstS);
+
+	for(ii=0; ii<dstS; ii += size)
+	{
+		// Get header byte
+		header= *srcL++;
+
+		if(header&0x80)		// compressed stint
+		{
+			size= min( (header&~0x80)+3, dstS-ii);
+			memset(&dstD[ii], *srcL++, size);
+		}
+		else				// noncompressed stint
+		{
+			size= min(header+1, dstS-ii);
+			memcpy(&dstD[ii], srcL, size);
+			srcL += size;
+		}
+	}
+
+	rec_attach(dst, dstD, 1, dstS);
 	return dstS;
 }
 

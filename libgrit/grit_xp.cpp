@@ -1,10 +1,15 @@
 //
 //! \file grit_xp.cpp
 //!   Exporter routines
-//! \date 20050814 - 20080212
+//! \date 20050814 - 20081129
 //! \author cearn
 //
 /* === NOTES ===
+  * 20081129,jv:
+	- fixed grit_prep_grf. The GRF chunk itself should not have 
+	  an extra size field.
+	- For meta-maps, the meta-tiles are now actually called fooMetaTiles, 
+	  instead of fooMap.
   * 20080211,jv:
 	- added DataItem. To be expanded later.
 	- added grf format.
@@ -235,17 +240,18 @@ bool grit_prep_item(GritRec *gr, eint id, DataItem *item)
 		item->pRec= &gr->_gfxRec;
 
 		strcat(strcpy(str, gr->symName), 
-			cAffix[grit_is_bmp(gr) ? E_BM : E_TILE]);
+			cAffix[grit_is_bmp(gr) ? E_AFX_BMP : E_AFX_TILE]);
 		strrepl(&item->name, str);
 		return true;
 
-	case GRIT_ITEM_MAP:		// Map item
+	case GRIT_ITEM_MAP:		// Map/metatile item
 		item->procMode= gr->mapProcMode;
 		item->dataType= gr->mapDataType;
 		item->compression= gr->mapCompression;
 		item->pRec= &gr->_mapRec;	
 
-		strcat(strcpy(str, gr->symName), cAffix[E_MAP]);
+		strcat(strcpy(str, gr->symName), 
+			cAffix[grit_is_metatiled(gr) ? E_AFX_MTILE : E_AFX_MAP]);
 		strrepl(&item->name, str);
 		return true;
 
@@ -255,7 +261,7 @@ bool grit_prep_item(GritRec *gr, eint id, DataItem *item)
 		item->compression= gr->mapCompression;
 		item->pRec= &gr->_metaRec;	
 
-		strcat(strcpy(str, gr->symName), cAffix[E_META]);
+		strcat(strcpy(str, gr->symName), cAffix[E_AFX_MMAP]);
 		strrepl(&item->name, str);
 		return true;
 
@@ -265,7 +271,7 @@ bool grit_prep_item(GritRec *gr, eint id, DataItem *item)
 		item->compression= gr->palCompression;
 		item->pRec= &gr->_palRec;	
 
-		strcat(strcpy(str, gr->symName), cAffix[E_PAL]);
+		strcat(strcpy(str, gr->symName), cAffix[E_AFX_PAL]);
 		strrepl(&item->name, str);
 		return true;
 	}
@@ -536,19 +542,12 @@ bool grit_xp_gbfs(GritRec *gr)
 	ii= 0;
 
 	// --- register the various fields ---
-	// Palette
-	if(gr->palProcMode == GRIT_EXPORT)
-	{
-		grit_gbfs_entry_init(&gr_gben[ii], &gr->_palRec, 
-			gr->symName, E_PAL);
-		gr_data[ii++]= gr->_palRec.data;
-	}
 
 	// Graphics
 	if(gr->gfxProcMode == GRIT_EXPORT)
 	{
 		grit_gbfs_entry_init(&gr_gben[ii], &gr->_gfxRec, 
-			gr->symName, (grit_is_bmp(gr) ? E_BM : E_TILE));
+			gr->symName, (grit_is_bmp(gr) ? E_AFX_BMP : E_AFX_TILE));
 		gr_data[ii++]= gr->_gfxRec.data;
 	}
 
@@ -556,17 +555,26 @@ bool grit_xp_gbfs(GritRec *gr)
 	if(gr->mapProcMode == GRIT_EXPORT)
 	{
 		grit_gbfs_entry_init(&gr_gben[ii], &gr->_mapRec, 
-			gr->symName, E_MAP);
+			gr->symName, (grit_is_metatiled(gr) ? E_AFX_MTILE :E_AFX_MAP));
 		gr_data[ii++]= gr->_mapRec.data;
 
 		// Meta map
 		if(grit_is_metatiled(gr))
 		{
 			grit_gbfs_entry_init(&gr_gben[ii], &gr->_metaRec, 
-				gr->symName, E_META);
+				gr->symName, E_AFX_MMAP);
 			gr_data[ii++]= gr->_metaRec.data;
 		}
 	}
+
+	// Palette
+	if(gr->palProcMode == GRIT_EXPORT)
+	{
+		grit_gbfs_entry_init(&gr_gben[ii], &gr->_palRec, 
+			gr->symName, E_AFX_PAL);
+		gr_data[ii++]= gr->_palRec.data;
+	}
+
 	gb_count= gr_count= ii;
 
 	// --- create header and finish entries ---
@@ -798,7 +806,7 @@ chunk_t *chunk_merge(const char *id, chunk_t *cklist[], uint count, const char *
 
 	for(ii=0; ii<count; ii++)
 		if(cklist[ii] != NULL)
-			size += cklist[ii]->size+8;
+			size += align(cklist[ii]->size,4)+8;
 
 	chunk_t *chunk;
 	u8 *dst;
@@ -806,18 +814,18 @@ chunk_t *chunk_merge(const char *id, chunk_t *cklist[], uint count, const char *
 	// Split creation into with or without group id.
 	if(groupID)
 	{
-		chunk= (chunk_t*)malloc(size+16);
+		// Make room for groupsID+total_size+id+data
+		chunk= (chunk_t*)malloc(size+8+4);
 		chunk_t *sub= (chunk_t*)chunk->data;
 
 		for(ii=0; ii<4; ii++)
 		{
 			chunk->id[ii]= groupID[ii];
-			sub->id[ii]= id[ii];
+			chunk->data[ii]= id[ii];
 		}
 
-		chunk->size= size+8;
-		sub->size= size;
-		dst= sub->data;
+		chunk->size= size+4;
+		dst= chunk->data+4;
 	}
 	else
 	{
@@ -855,7 +863,13 @@ chunk_t *grit_prep_grf(GritRec *gr)
 	chunk_t *cklist[5]=  { NULL };
 
 	// Semi-constant data.
-	const char *ckIDs[4]= { "GFX ", "MAP ", "MMAP", "PAL " };
+
+	const char *ckIDs[4]= 
+	{
+		"GFX ",
+		(grit_is_metatiled(gr)? "MTIL" : "MAP "),
+		"MMAP",	"PAL "
+	};
 	uint bpps[4]= { gr->gfxBpp, 16, 16, 16 };
 	if(gr->mapLayout == GRIT_MAP_AFFINE)
 		bpps[GRIT_ITEM_MAP]= 8;
@@ -910,15 +924,7 @@ bool grit_xp_grf(GritRec *gr)
 	FILE *fout= fopen(gr->dstPath, "wb");
 
 	chunk_t *chunk= grit_prep_grf(gr);
-	u32 size= chunk->size+8;
-
-	// --- Write to file --- 
-
-	//fwrite("RIFF", 1, 4, fout);
-	//fwrite(&size, 4, 1, fout);
-	fwrite(chunk, 1, size, fout);
-
-	// --- Clean up ---
+	fwrite(chunk, 1, chunk->size+8, fout);
 	chunk_free(chunk);
 
 	fclose(fout);
@@ -934,7 +940,7 @@ bool grit_xp_grf(GritRec *gr)
 
 //! Export to GNU object file
 /*!
-	\note Non-functional. For future use
+	\note Non-functional. For future use.
 */
 bool grit_xp_o(GritRec *gr)
 {
@@ -1046,7 +1052,7 @@ bool grit_xp_h(GritRec *gr)
 	if(gr->bRiff)	// Single GRF item
 	{
 		grit_xp_decl(fout, grit_type_size(gr->gfxDataType), 
-			gr->symName, E_GRF, grit_xp_size(gr));
+			gr->symName, E_AFX_GRF, grit_xp_size(gr));
 	}
 	else			// Separate items
 	{
@@ -1174,7 +1180,7 @@ bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 
 			// If map is printed as well, put meta cmt there
 			if(gr->mapProcMode != GRIT_EXPORT && mw*mh > 1)
-				fprintf(fp, "%dx%d metatiles ", mw, mh);
+				fprintf(fp, "Metatiled by %dx%d ", mw, mh);
 			break;
 
 		case GRIT_GFX_BMP:
@@ -1215,7 +1221,7 @@ bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 		fprintf(fp, "%dx%d \n", aw/mw/8, ah/mh/8);
 		if(grit_is_metatiled(gr))
 		{
-			fprintf(fp, "%s\t%dx%d metatiles\n", cmt, mw, mh);
+			fprintf(fp, "%s\tMetatiled by %dx%d\n", cmt, mw, mh);
 			tmp= rec_size(&gr->_metaRec);
 			sprintf(str2, "%d + ", tmp);
 			strcat(str, str2);

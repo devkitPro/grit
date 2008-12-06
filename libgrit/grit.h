@@ -13,6 +13,7 @@
 #include "grit_core.h"
 #include "pathfun.h"
 #include "logger.h"
+#include "cprs.h"
 
 
 // Doxygen main groups:

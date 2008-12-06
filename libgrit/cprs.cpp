@@ -12,6 +12,7 @@
 	a namecange may be in order at some point :| 
 */
 
+#include <assert.h>
 #include "cprs.h"
 
 
@@ -34,6 +35,7 @@ u32	cprs_create_header(uint size, u8 tag)
 //! compression dispatcher.
 bool cprs_compress(RECORD *dst, const RECORD *src, ECprsTag tag)
 {
+	assert(dst && src);
 	if(dst==NULL || src==NULL)
 		return false;
 
@@ -41,18 +43,18 @@ bool cprs_compress(RECORD *dst, const RECORD *src, ECprsTag tag)
 
 	switch(tag)
 	{
-	case CPRS_NONE_TAG:
-		bOK= cprs_none(dst, src) != 0;			break;
+	case CPRS_FAKE_TAG:
+		bOK= fake_compress(dst, src) != 0;			break;
 
 	case CPRS_LZ77_TAG:
-		bOK= cprs_gba_lz77(dst, src) != 0;		break;
+		bOK= lz77gba_compress(dst, src) != 0;		break;
 
 	//CPRS_HUF4_TAG
 	case CPRS_HUFF8_TAG:
-		bOK= cprs_gba_huff(dst, src, 8) != 0;	break;
+		bOK= huffgba_compress(dst, src, 8) != 0;	break;
 
 	case CPRS_RLE_TAG:
-		bOK= cprs_gba_rle8(dst, src) != 0;		break;
+		bOK= rle8gba_compress(dst, src) != 0;		break;
 
 
 	//CPRS_DIFF8_TAG
@@ -64,23 +66,74 @@ bool cprs_compress(RECORD *dst, const RECORD *src, ECprsTag tag)
 	return bOK;
 }
 
-//! Don't compress, but still add a compression-like header.
-uint cprs_none(RECORD *dst, const RECORD *src)
+bool cprs_decompress(RECORD *dst, const RECORD *src)
 {
-	uint srcS= src->width * src->height;
+	assert(dst && src && src->data);
+	if(dst==NULL || src==NULL || src->data==NULL)
+		return false;
+
+	u32 header= read32le(src->data);
+	
+	switch(header&255)
+	{
+	case CPRS_FAKE_TAG:
+		fake_decompress(dst, src);
+		break;
+	case CPRS_LZ77_TAG:
+		lz77gba_decompress(dst, src);
+		break;
+	case CPRS_HUFF_TAG:
+		assert(0);
+		return false;
+	case CPRS_HUFF8_TAG:
+		assert(0);
+		return false;
+	case CPRS_RLE_TAG:
+		rle8gba_decompress(dst, src);
+		break;
+	} 
+
+	return true;
+}
+
+
+//! Don't compress, but still add a compression-like header.
+uint fake_compress(RECORD *dst, const RECORD *src)
+{
+	assert(dst && src && src->data);
+	if(dst==NULL || src==NULL || src->data==NULL)
+		return 0;
+
+	uint srcS= rec_size(src);
 	uint dstS= ALIGN4(srcS)+4;
 
 	u8 *dstD= (u8*)malloc(dstS);
 	if(dstD == NULL)
 		return 0;
 
-	*(u32*)dstD= cprs_create_header(srcS, CPRS_NONE_TAG);
+	write32le(dstD, srcS<<8 | CPRS_FAKE_TAG);
 	memcpy(dstD+4, src->data, srcS);
+	rec_attach(dst, dstD, 1, dstS);
 
-	free(dst->data);	
-	dst->width= 1;
-	dst->height= dstS;
-	dst->data= dstD;
+	return dstS;
+}
+
+
+uint fake_decompress(RECORD *dst, const RECORD *src)
+{
+	assert(dst && src && src->data);
+	if(dst==NULL || src==NULL || src->data==NULL)
+		return 0;
+
+	u32 header= read32le(src->data);
+	if((header&255) != CPRS_FAKE_TAG)
+		return 0;
+
+	uint dstS= header>>8;
+	u8 *dstD= (u8*)malloc(dstS);
+
+	memcpy(src->data+4, dstD, dstS);
+	rec_attach(dst, dstD, 1, dstS);	
 
 	return dstS;
 }

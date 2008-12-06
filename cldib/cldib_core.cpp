@@ -543,4 +543,47 @@ CLDIB *dib_copy(CLDIB *src, int ll, int tt, int rr, int bb, bool bClip)
 	return dst;
 }
 
+
+//! Paste \a src onto \a dst at position (\a dstX,\a dstY).
+/*!
+	\note	Still early going and somewhat restrictive. Bpps must 
+		be equal and 8 or higher. Seems ok for those occasions.
+*/
+bool dib_paste(CLDIB *dst, CLDIB *src, int dstX, int dstY)
+{
+	if(src==NULL || dst == NULL)
+		return false;
+
+	int srcW, srcH, srcB, srcP;
+	int dstW, dstH, dstB, dstP;
+
+	dib_get_attr(dst, &dstW, &dstH, &dstB, &dstP);
+	dib_get_attr(src, &srcW, &srcH, &srcB, &srcP);
+
+	// Bitdepth check. To remove later
+	if(srcB != dstB || srcB<8)
+		return false;
+
+	// --- Clip ---
+	int srcX=0, srcY=0;
+	if(dstX+srcW<0 || dstX>=dstW)	return true;
+	if(dstY+srcH<0 || dstY>=dstH)	return true;
+
+	if(dstX<0)	{	srcW += dstX;	srcX -= dstX; dstX= 0;	}
+	if(dstY<0)	{	srcH += dstY;	srcY -= dstY; dstY= 0;	}
+
+	if(srcW >= dstW-dstX)	{	srcW= dstW-dstX;	}
+	if(srcH >= dstH-dstY)	{	srcH= dstH-dstY;	}
+
+	// --- Copy ---
+	UINT len= srcW*srcB/8;
+	BYTE *srcL= dib_get_img_at(src, srcX, srcY);
+	BYTE *dstL= dib_get_img_at(dst, dstX, dstY);
+
+	for(int ii=0; ii<srcH; ii++)
+		memcpy(&dstL[ii*dstP], &srcL[ii*srcP], len);
+
+	return true;
+}
+
 // EOF

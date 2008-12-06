@@ -77,6 +77,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 
 #include "cprs.h"
 
@@ -90,13 +91,13 @@
 
 // Define information for compression
 //   (dont modify from 4096/18/2 if AGBCOMP format is required)
-#define N               4096   // size of ring buffer (12 bit)
-#define F                 18   // upper limit for match_length
+#define RING_MAX        4096   // size of ring buffer (12 bit)
+#define FRAME_MAX         18   // upper limit for match_length
 #define THRESHOLD          2   // encode string into position and length
                                //   if matched length is greater than this 
-#define NIL                N   // index for root of binary search trees 
+#define NIL         RING_MAX   // index for root of binary search trees 
 #define TEXT_BUF_CLEAR     0   // byte to initialize the area before text_buf with
-#define NMASK           (N-1)  // for wrapping
+#define NMASK           (RING_MAX-1)  // for wrapping
 
 
 // --------------------------------------------------------------------
@@ -108,15 +109,20 @@
    as the Allegro library did.
 */
 static unsigned long int codesize = 0;  // code size counter
-// ring buffer of size N with extra F-1 bytes to facilitate string comparison
-static BYTE text_buf[N + F - 1];
+
+// Ring buffer of size RING_MAX with extra FRAME_MAX-1 bytes to 
+// facilitate string comparison
+static BYTE text_buf[RING_MAX + FRAME_MAX - 1];
 static int match_position;  // global string match position
 static int match_length;  // global string match length
-static int lson[N+1], rson[N+256+1], dad[N+1];  // left & right children & parents -- These constitute binary search trees.
 
 
-BYTE *InBuf, *OutBuf;
-int InSize, OutSize, InOffset;
+// left & right children & parents -- These constitute binary search trees.
+static int lson[RING_MAX+1], rson[RING_MAX+256+1], dad[RING_MAX+1];  
+
+
+static BYTE *InBuf, *OutBuf;
+static int InSize, OutSize, InOffset;
 
 
 // --------------------------------------------------------------------
@@ -140,15 +146,15 @@ static int InChar(void);
 
 
 // Initializes InBuf, InSize; allocates OutBuf.
-// the rest is done in CompressLZ77
-uint cprs_gba_lz77(RECORD *dst, const RECORD *src)
+// the rest is done in CompressLZ77.
+uint lz77gba_compress(RECORD *dst, const RECORD *src)
 {
-	// fail on the obvious
+	// Fail on the obvious
 	if(src==NULL || src->data==NULL || dst==NULL)
 		return 0;
 	
-	InSize= src->width*src->height;
-	OutSize = InSize + (InSize>>3) + 16;
+	InSize= rec_size(src);
+	OutSize = InSize + InSize/8 + 16;
 	OutBuf = (BYTE*)malloc(OutSize); 
 	if(OutBuf == NULL)
 		return 0;
@@ -157,43 +163,84 @@ uint cprs_gba_lz77(RECORD *dst, const RECORD *src)
 	CompressLZ77();
 	OutSize= ALIGN4(OutSize);
 
-	free(dst->data);
-	dst->data= (BYTE*)malloc(OutSize);
-	memcpy(dst->data, OutBuf, OutSize);
-	dst->width= 1;
-	dst->height= OutSize;
+	u8 *dstD= (u8*)malloc(OutSize);
+	memcpy(dstD, OutBuf, OutSize);
+	rec_attach(dst, dstD, 1, OutSize);
 
 	free(OutBuf);
 
 	return OutSize;
 }
 
+//! Decompress GBA LZ77 data.
+uint lz77gba_decompress(RECORD *dst, const RECORD *src)
+{
+	assert(dst && src && src->data);
+	if(dst==NULL || src==NULL || src->data==NULL)
+		return 0;
+
+	// Get and check header word
+	u32 header= read32le(src->data);
+	if((header&255) != CPRS_LZ77_TAG)
+		return 0;
+
+	u32 flags;
+	int ii, jj, dstS= header>>8;
+	u8 *srcL= src->data+4, *dstD= (BYTE*)malloc(dstS);
+
+	for(ii=0, jj=-1; ii<dstS; jj--)
+	{
+		if(jj<0)				// Get block flags
+		{
+			flags= *srcL++;
+			jj= 7;
+		}
+		
+		if(flags>>jj & 1)		// Compressed stint
+		{
+			int count= (srcL[0]>>4)+THRESHOLD+1;
+			int ofs=  ((srcL[0]&15)<<8 | srcL[1])+1;
+			srcL += 2;
+			while(count--)
+			{
+				dstD[ii]= dstD[ii-ofs];
+				ii++;
+			}
+		}
+		else					// Single byte from source
+			dstD[ii++]= *srcL++;
+	}
+
+	rec_attach(dst, dstD, 1, dstS);
+	return dstS;
+}
+
 
 /* InitTree() **************************
    Initialize a binary search tree.
 
-   For i = 0 to N - 1, rson[i] and lson[i] will be the right and
+   For i = 0 to RING_MAX - 1, rson[i] and lson[i] will be the right and
    left children of node i.  These nodes need not be initialized.
    Also, dad[i] is the parent of node i.  These are initialized
-   to NIL (= N), which stands for 'not used.'
-   For i = 0 to 255, rson[N + i + 1] is the root of the tree
+   to NIL (= RING_MAX), which stands for 'not used.'
+   For i = 0 to 255, rson[RING_MAX + i + 1] is the root of the tree
    for strings that begin with character i.  These are
    initialized to NIL.  Note there are 256 trees.
 */
 void InitTree(void)
 {
 	int  i;
-	for(i= N+1; i <= N+256; i++)
+	for(i= RING_MAX+1; i <= RING_MAX+256; i++)
 		rson[i]= NIL;
-	for(i=0; i < N; i++)
+	for(i=0; i < RING_MAX; i++)
 		dad[i]= NIL;
 }
 
 /* InsertNode() ************************
-   Inserts string of length F, text_buf[r..r+F-1], into one of the
+   Inserts string of length FRAME_MAX, text_buf[r..r+FRAME_MAX-1], into one of the
    trees (text_buf[r]'th tree) and returns the longest-match position
    and length via the global variables match_position and match_length.
-   If match_length = F, then removes the old node in favor of the new
+   If match_length = FRAME_MAX, then removes the old node in favor of the new
    one, because the old one will be deleted sooner.
    Note r plays double role, as tree node and position in buffer.
 */
@@ -202,7 +249,7 @@ void InsertNode(int r)
 	int  i, p, cmp, prev_length;
 	BYTE *key;
 
-	cmp= 1;  key= &text_buf[r];  p= N + 1 + key[0];
+	cmp= 1;  key= &text_buf[r];  p= RING_MAX + 1 + key[0];
 	rson[r]= lson[r]= NIL;  
 	prev_length= match_length= 0;
 	for( ; ; )
@@ -230,7 +277,7 @@ void InsertNode(int r)
 			}
 
 		}
-		for(i=1; i < F; i++)
+		for(i=1; i < FRAME_MAX; i++)
 			if((cmp = key[i] - text_buf[p + i]) != 0)
 				break;
 
@@ -246,7 +293,7 @@ void InsertNode(int r)
 				match_length= i;
 				match_position= p;
 			}
-			if(match_length >= F)
+			if(match_length >= FRAME_MAX)
 				break;
 		}
 	}
@@ -322,7 +369,7 @@ void CompressLZ77(void)
 
 	OutSize=4;  // skip the compression type and file size
 	InOffset=0;
-	match_position= curmatch= N-F;
+	match_position= curmatch= RING_MAX-FRAME_MAX;
 
 	InitTree();  // initialize trees
 	code_buf[0] = 0;  /* code_buf[1..16] saves eight units of code, and
@@ -330,13 +377,13 @@ void CompressLZ77(void)
 	is an unencoded letter (1 byte), "1" a position-and-length pair
 	(2 bytes).  Thus, eight units require at most 16 bytes of code. */
 	code_buf_ptr = 1;
-	s = 0;  r = N - F;
+	s = 0;  r = RING_MAX - FRAME_MAX;
 
 	// Clear the buffer
 	for(i = s; i < r; i++)
 		text_buf[i] = TEXT_BUF_CLEAR;
-	// Read F bytes into the last F bytes of the buffer
-	for(len = 0; len < F && (c = InChar()) != -1; len++)
+	// Read FRAME_MAX bytes into the last FRAME_MAX bytes of the buffer
+	for(len = 0; len < FRAME_MAX && (c = InChar()) != -1; len++)
 		text_buf[r + len] = c;  
 	if(len == 0)
 		return;
@@ -348,7 +395,7 @@ void CompressLZ77(void)
 	// Perhaps. 
 	// However, the strings you create here have no relation to 
 	// the actual data and are therefore completely bogus. Removed!
-	//for (i = 1; i <= F; i++)
+	//for (i = 1; i <= FRAME_MAX; i++)
 	//	InsertNode(r - i);
 
 	// Create the first node, sets match_length to 0
@@ -401,16 +448,16 @@ void CompressLZ77(void)
 		{
 			DeleteNode(s);      // Delete string beforelook-ahead
 			text_buf[s] = c;    // place new bytes
-			// text_buf[N..N+F> is a double for text_buf[0..F>
+			// text_buf[N..RING_MAX+FRAME_MAX> is a double for text_buf[0..FRAME_MAX>
 			// for easier string comparison
-			if(s < F-1)
-				text_buf[s + N] = c;
+			if(s < FRAME_MAX-1)
+				text_buf[s + RING_MAX] = c;
 
 			// add and wrap around the buffer
 			s = (s + 1) & NMASK;
 			r = (r + 1) & NMASK;
 
-			// Register the string in text_buf[r..r+F-1]
+			// Register the string in text_buf[r..r+FRAME_MAX-1]
 			InsertNode(r);
 		}
 
