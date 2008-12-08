@@ -5,7 +5,7 @@
 //! \author cearn
 /* === NOTES === 
   * 20080215,jv: made tile-size variable. Only works for -gb though.
-  * 20080211,jv: pal-size not forced to 4x anymore (as it should be).
+  * 20080211,jv: pal-size not forced to 4-bytes anymore (as it should be).
   * 20080111,jv. Name changes, part 1
   * 20061209,jv: Fixed NDS alpha stuff. 
   * 20060727,jv: TODO: alpha clr(id) corrections
@@ -436,21 +436,26 @@ bool grit_prep_map(GritRec *gr)
 	}
 	mapD= (u16*)mapRec.data;
 
-	// --- Map tile offset ---
+	// --- Map-entry offset ---
+	// NOTE: tile-index, flipping flags and color bank applied separately.
 	if(gr->mapOffset)
 	{
 		lprintf(LOG_STATUS, "  Applying tile offset (0x%08X).\n", 
 			gr->mapOffset);
 
-		u32 se, base= gr->mapOffset &~ OFS_BASE0;
+		u32 me, base= gr->mapOffset &~ OFS_BASE0;
 		bool bBase0= (gr->mapOffset & OFS_BASE0) != 0;
 		for(ii=0; ii<mapN; ii++)
 		{
-			se= mapD[ii]&SE_ID_MASK;
-			if(bBase0 || se)
-				se += base;
-			mapD[ii] &= ~SE_ID_MASK;
-			mapD[ii] |= (se & SE_ID_MASK);
+			me= mapD[ii];
+			if(bBase0 || me)
+			{
+				u32 tmp;
+				tmp  = ((me + (base&SE_ID_MASK   )) & SE_ID_MASK   );
+				tmp |= ((me ^ (base&SE_FLIP_MASK )) & SE_FLIP_MASK );
+				tmp |= ((me + (base&SE_PBANK_MASK)) & SE_PBANK_MASK);
+				mapD[ii]= tmp;
+			}
 		}
 	}
 

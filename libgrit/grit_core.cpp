@@ -1,7 +1,7 @@
 //
 //! \file grit_core.cpp
 //!   Core grit routines
-//! \date 20050814 - 20080512
+//! \date 20050814 - 20081207
 //! \author cearn
 //
 /* === NOTES === 
@@ -27,7 +27,7 @@
 
 
 static const char __grit_app_string[]=
-"\tExported by Cearn's GBA Image Transmogrifier\n"
+"\tExported by Cearn's GBA Image Transmogrifier, v" LIBGRIT_VERSION "\n"
 "\t( http://www.coranac.com/projects/#grit )";
 
 

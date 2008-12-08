@@ -50,6 +50,15 @@ typedef u16 COLOR;
 // --------------------------------------------------------------------
 
 
+#ifndef LIBGRIT_VERSION
+#define LIBGRIT_VERSION	"0.8.3"
+#endif
+
+#ifndef LIBGRIT_BUILD
+#define LIBGRIT_BUILD	"20081207"
+#endif
+
+
 enum EGritItem
 {
 	GRIT_ITEM_GFX		= 0,		//!< Graphics stuff

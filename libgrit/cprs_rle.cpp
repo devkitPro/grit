@@ -1,7 +1,7 @@
 //
 //! \file grit_rle.cpp
 //!   GBA RLE compression
-//! \date 20050814 - 20080208
+//! \date 20050814 - 20081207
 //! \author cearn
 //
 // === NOTES === 

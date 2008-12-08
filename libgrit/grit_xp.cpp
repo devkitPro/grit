@@ -1,7 +1,7 @@
 //
 //! \file grit_xp.cpp
 //!   Exporter routines
-//! \date 20050814 - 20081129
+//! \date 20050814 - 2008207
 //! \author cearn
 //
 /* === NOTES ===

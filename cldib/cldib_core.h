@@ -56,7 +56,7 @@
 #endif
 
 //! In-place swap
-#define SWAP2(a, b)			( (b) ^= ((a) ^= ((b) ^= (a))))
+#define SWAP2(a, b)	( (b) ^= ((a) ^= ((b) ^= (a))))
 
 //! Swap using a temporary placeholder
 #define SWAP3(a, b, tmp)	\

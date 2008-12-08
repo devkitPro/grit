@@ -155,7 +155,7 @@ uint lz77gba_compress(RECORD *dst, const RECORD *src)
 	
 	InSize= rec_size(src);
 	OutSize = InSize + InSize/8 + 16;
-	OutBuf = (BYTE*)malloc(OutSize); 
+	OutBuf = (BYTE*)malloc(OutSize);
 	if(OutBuf == NULL)
 		return 0;
 	InBuf= (BYTE*)src->data;

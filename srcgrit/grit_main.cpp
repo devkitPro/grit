@@ -1,7 +1,7 @@
 //
 //! \file grit_main.cpp
 //!   Entry file for cmd-line grit.
-//! \date 20050913 - 20080512
+//! \date 20050913 - 20081207
 //! \author cearn
 //
 /* === NOTES ===
@@ -57,12 +57,13 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre);
 // --------------------------------------------------------------------
 
 #ifndef GRIT_VERSION
-#define GRIT_VERSION	"0.8.2"
+#define GRIT_VERSION	"0.8.3"
 #endif
 
 #ifndef GRIT_BUILD
-#define GRIT_BUILD		"20081129"
+#define GRIT_BUILD		"20081207"
 #endif
+
 
 // --- Application constants ---
 
@@ -98,7 +99,7 @@ const char appHelpText[]=
 "-m | -m!       Include or exclude map data [exc]\n"
 "-mu(8|16|32)   Map data type: u8, u16, u32 [u16]\n"
 "-mz[!lhr0]     Map compression: off, lz77, huff, RLE, off+header [off]\n"
-"-ma{n}         Map tile offset n (non-zero entries) [0]\n"
+"-ma{n}         Map-entry offset n (non-zero entries) [0]\n"
 //"-mA{n}         Map tile offset n (all entries) [0]\n"
 "-mR{t,p,f}     Tile reduction: (t)iles, (p)al, (f)lipped \n"
 "                 options can be combined [-mRtpf]\n"
@@ -568,11 +569,11 @@ bool grit_parse_shared(GritRec *gr, const strvec &args)
 	// dst/sym name stuff:
 	// * if !dst && !sym : from source (standard) and SET APPEND!!!
 	// * if  dst && !sym : from dst (standard)
-	// * if !dst &&  sym : from sym (PONDER: directory?)
+	// * if !dst &&  sym : from sym (unless indiv-dst exists )
 	// * if  dst &&  sym : use those
 
-	const char *pDst= CLI_STR("-O", gr->dstPath);
-	const char *pSym= CLI_STR("-S", gr->symName);
+	const char *pDst= CLI_STR("-O", "");
+	const char *pSym= CLI_STR("-S", "");
 
 	bool bDst= !isempty(pDst), bSym= !isempty(pSym);
 
@@ -588,12 +589,17 @@ bool grit_parse_shared(GritRec *gr, const strvec &args)
 	else if(!bDst &&  bSym)
 	{
 		strrepl(&gr->symName, pSym);
+		if(isempty(gr->dstPath))
 		strrepl(&gr->dstPath, pSym);		
 	}
 	else
 	{
-		lprintf(LOG_WARNING, "No -O or -S in shared run. Could be troublesome.\n");
-		strrepl(&gr->symName, "shared");
+		char symName[MAXPATHLEN];
+		
+		path_get_title(symName, gr->dstPath, MAXPATHLEN);
+		strcat(symName, "Shared");
+		lprintf(LOG_WARNING, "No -O or -S in shared run. Using \"%s\".\n", symName);
+		strrepl(&gr->symName, symName);
 		gr->bAppend= true;
 	}
 
@@ -715,34 +721,45 @@ bool grit_save_ext_tiles(GritRec *gr)
 */
 void args_gather(strvec &args, int argc, char **argv)
 {
+	/*
+		Allow for adding files as well:
+		- reach argv till first "-"
+		- read args into arg-list
+		- in grit file
+		  - add args till first "-"
+		  - read asrgs into arg-list
+		- merge
+	*/
+
 	int ii;
 	char str[MAXPATHLEN], *pstr;
 
-	// Load cmd-line args
+	// --- Load commandline options ---
 	for(ii=0; ii<argc; ii++)
 		args.push_back(strdup(argv[ii]));
 	
-	// Test for flag file (-ff {path}), or 'default' flag file
-	path_repl_ext(str, argv[1], "grit", MAXPATHLEN);
 
-	// if flag file, load args from file
+	// --- Find option-file from {{path}}.grit or -ff ---
+	path_repl_ext(str, argv[1], "grit", MAXPATHLEN);
 	pstr= cli_str("-ff", args, str);
 
-	// Open grit-option file. Bug out if not found.
 	FILE *fp= fopen(pstr, "r");
-	if(fp == NULL)
+	if(fp != NULL)
 	{
-		lprintf(LOG_STATUS, "No .grit file\n");
-		return;
-	}
+		// If we're here, we have a grit file.
+		// '#' indicates line comments
+		// Items up to the first one starting with '-' are considered
+		// additional file names, loaded into 'filed' and inserted later.
 
+		bool hasFiles= true;
+		strvec files;		// For possible additional files
 
 	// Get flags
 	const char seps[]= "\n\r\t ";
 
 	while( !feof(fp) )
 	{
-		fgets(str, 1024, fp);
+			fgets(str, MAXPATHLEN, fp);
 		// Find comment and end string there
 		if( pstr= strchr(str, '#') )
 			*pstr= '\0';
@@ -751,12 +768,35 @@ void args_gather(strvec &args, int argc, char **argv)
 		pstr= strtok(str, seps);
 		while( pstr != NULL )
 		{
+				if(pstr[0] == '-')
+					hasFiles= false;
+
+				if(hasFiles)
+					files.push_back(strdup(pstr));
+				else
 			args.push_back(strdup(pstr));
+
 			pstr= strtok(NULL, seps);
 		}
 	}
-
 	fclose(fp);
+
+		// Add additional grit files.
+		// NOTE: no strdup here; I just need to add the pointers.
+		if(!files.empty())
+		{
+
+			for(ii=0; ii<argc; ii++)
+				if(args[ii][0]=='-')
+					break;
+
+			args.insert(args.begin() + ii, files.begin(), files.end());
+		}
+
+	}
+	else
+		lprintf(LOG_STATUS, "No .grit file\n");
+
 }
 
 //! Some extra validation.
