@@ -872,7 +872,7 @@ int run_individual(GritRec *gr, const strvec &args, const strvec &fpaths)
 		lprintf(LOG_STATUS, "Input file %s\n", fpaths[ii]);
 
 		if( !run_prep(gr, fpaths[ii]) )
-			continue;
+			return EXIT_FAILURE;
 
 		grit_parse(gr, args);
 
