@@ -97,15 +97,15 @@ INLINE void write32be(BYTE *dst, DWORD src);
 */
 
 // PONDER: not sure I should do this, but we'll see
-#if (BYTE_ORDER == LITTLE_ENDIAN)
-	#define CCID_RED   2
-	#define CCID_GREEN 1
-	#define CCID_BLUE  0
-	#define CCID_ALPHA 3
-#else	
+#if (BYTE_ORDER == BIG_ENDIAN) || defined(__APPLE__)
 	#define CCID_RED   0
 	#define CCID_GREEN 1
 	#define CCID_BLUE  2
+	#define CCID_ALPHA 3
+#else	
+	#define CCID_RED   2
+	#define CCID_GREEN 1
+	#define CCID_BLUE  0
 	#define CCID_ALPHA 3
 #endif
 
