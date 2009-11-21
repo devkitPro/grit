@@ -1,9 +1,9 @@
 GRIT_VERSION	:=	0.8.5
 GRIT_BUILD	:=	20092010
 
-CPPFLAGS	:=	-g -O3 -Icldib -Ilibgit
-CPPFLAGS	+=	-DGRIT_VERSION=\"$(GRIT_VERSION)\" -DGRIT_BUILD=\"$(GRIT_BUILD)\"
-LDFLAGS		:=	-g
+CXXFLAGS	:=	-Icldib -Ilibgrit -Iextlib
+CXXFLAGS	+=	-DGRIT_VERSION=\"$(GRIT_VERSION)\" -DGRIT_BUILD=\"$(GRIT_BUILD)\"
+LDFLAGS		:=
 
 # ---------------------------------------------------------------------
 # Platform specific stuff
@@ -12,34 +12,34 @@ LDFLAGS		:=	-g
 UNAME	:=	$(shell uname -s)
 
 ifneq (,$(findstring MINGW,$(UNAME)))
+	PLATFORM	:= win32
+	EXEEXT		:= .exe
+	CFLAGS		+= -mno-cygwin
+	LDFLAGS		+= -mno-cygwin -s
 	OS	:=	win32
-	EXEEXT		:=	.exe
-	EXTRAINSTALL := extlib/FreeImage.dll
-	EXTRATAR 	:=	-C extlib FreeImage.dll
 endif
 
 ifneq (,$(findstring CYGWIN,$(UNAME)))
-	OS	:= win32
-	CPPFLAGS	+= -mno-cygwin
-	LDFLAGS		+= -mno-cygwin
+	CFLAGS		+= -mno-cygwin
+	LDFLAGS		+= -mno-cygwin -s
 	EXEEXT		:= .exe
-	EXTRAINSTALL := extlib/FreeImage.dll
-	EXTRATAR	:= -C extlib FreeImage.dll
+	OS	:=	win32
 endif
 
 ifneq (,$(findstring Darwin,$(UNAME)))
-	OS	:=	OSX
-	CFLAGS	+=	-mmacosx-version-min=10.4 -isysroot /Developer/SDKs/MacOSX10.4u.sdk
-	ARCH	:=	-arch i386 -arch ppc
-	LDFLAGS	+=	$(ARCH)
-else
-	LDFLAGS += -s
+	SDK	:=	/Developer/SDKs/MacOSX10.4u.sdk
+	OSXCFLAGS	:= -O -mmacosx-version-min=10.4 -isysroot $(SDK) -arch i386 -arch ppc
+	OSXCXXFLAGS	:=	$(OSXCFLAGS)
+	CXXFLAGS	+=	-fvisibility=hidden
+	export MACOSX_DEPLOYMENT_TARGET	:=	10.4
+	LDFLAGS += -arch i386 -arch ppc -Wl,-syslibroot,$(SDK)
 endif
 
 ifneq (,$(findstring Linux,$(UNAME)))
-	OS	:=	Linux
-	LDFLAGS += -static
+	LDFLAGS += -s -static
+	OS := Linux
 endif
+
 
 TARGET	:=	grit$(EXEEXT)
 
@@ -144,8 +144,8 @@ dist-bin: all
 dist: dist-src dist-bin
 
 build/%.o	:	%.cpp
-	$(CXX) -E -MMD -MP -MF build/$*.d $(CPPFLAGS) $< > /dev/null 
-	$(CXX)  $(CPPFLAGS) $(ARCH) -c $< -o $@
+	$(CXX) -E -MMD -MF build/$(*).d $(CXXFLAGS) $< > /dev/null
+	$(CXX) $(OSXCXXFLAGS) $(CXXFLAGS) -o $@ -c $<
 
 %.a	:
 	rm -f $@
