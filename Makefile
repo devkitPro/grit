@@ -31,8 +31,7 @@ ifneq (,$(findstring Darwin,$(UNAME)))
 	OSXCFLAGS	:= -mmacosx-version-min=10.4 -isysroot $(SDK) -arch i386 -arch ppc
 	OSXCXXFLAGS	:=	$(OSXCFLAGS)
 	CXXFLAGS	+=	-fvisibility=hidden
-	LDFLAGS		+= -mmacosx-version-min=10.4 -Wl,-syslibroot,$(SDK) -arch i386 -arch ppc 
-	export MACOSX_DEPLOYMENT_TARGET	:=	10.4
+	LDFLAGS		+= -mmacosx-version-min=10.4 -Wl,-syslibroot,$(SDK) -arch i386 -arch ppc
 endif
 
 ifneq (,$(findstring Linux,$(UNAME)))
