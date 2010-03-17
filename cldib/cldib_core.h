@@ -1,7 +1,7 @@
 //
 //! \file cldib_core.h
 //!  Some DIB utilities (thank you FreeImage)
-//! \date 20050823 - 20060816
+//! \date 20050823 - 20100104
 //! \author cearn
 // === NOTES ===
 // * 20060816, CLD: added swap_rgb16/24/32
@@ -30,7 +30,22 @@
 *	\{
 */
 
+#ifndef	CLDIB_TYPES
+#define CLDIB_TYPES
+
+typedef unsigned char  u8 , uchar, echar;
+typedef unsigned short u16, ushort, eshort;
+typedef unsigned int   u32, uint, eint;
+
+typedef signed char  s8;
+typedef signed short s16; 
+typedef signed int   s32;
+
+#endif
+
+#ifndef INLINE
 #define INLINE static inline	//<! For portable inline functions
+#endif
 
 
 //! Get the number of elements in an array.
@@ -62,12 +77,21 @@
 #define SWAP3(a, b, tmp)	\
 	do { (tmp)=(b); (b)=(a); (a)=(tmp);	} while(0)
 
+INLINE bool ispo2(uint x);
+INLINE u32 ceilpo2(u32 x);
 
-INLINE unsigned int align(unsigned int x, unsigned int size);
+INLINE uint align(uint x, uint size);
 INLINE int clamp(int x, int min, int max);
 INLINE int reflect(int x, int min, int max);
 INLINE int wrap(int x, int min, int max);
 
+
+//! \name Bitfield functions
+//\{
+INLINE u32 bfGet(u32 y, uint shift, uint len);
+template<class T> 
+INLINE void bfSet(T &y, u32 x, uint shift, uint len);
+//\}
 
 //! \name Little endian data read/write
 //\{
@@ -154,7 +178,6 @@ typedef struct RECORD
 	BYTE *data;		//!< Binary data.
 } RECORD;
 
-
 //! Return full size of \a rec in bytes.
 INLINE int rec_size(const RECORD *rec)
 { return rec->width*rec->height;	}
@@ -210,6 +233,15 @@ bool dib_save_##_type##(const char *fpath, CLDIB *dib)
 //! Round up to next multiple of four.
 #define ALIGN4(n) ( ((n)+3)&~3 )
 
+
+//! Prepare a named bit-field for for insterion or combination.
+#define BFN_PREP(x, name)	( ((x)<<name##_SHIFT) & name##_MASK )
+
+//! Get the value of a named bitfield from \a y. Equivalent to (var=) y.name
+#define BFN_GET(y, name)	( ((y) & name##_MASK)>>name##_SHIFT )
+
+//! Set a named bitfield in \a y to \a x. Equivalent to y.name= x.
+#define BFN_SET(y, x, name)	(y = ((y)&~name##_MASK) | BFN_PREP(x,name) )
 
 /*!	\}	*/
 
@@ -319,9 +351,27 @@ int hbm_blit(HDC hdc, int dX, int dY, int dW, int dH,
 
 // === MISC ===
 
+//! Check if \a x is a power of 2.
+INLINE bool ispo2(uint x)
+{	return x && !(x & (x-1));		}
+
+//! Round up to the next power of 2.
+INLINE u32 ceilpo2(u32 x)
+{
+	x--;
+	x |= x>> 1;
+	x |= x>> 2;
+	x |= x>> 4;
+	x |= x>> 8;
+	x |= x>>16;
+	x++;
+	return x;
+}
+
 //! Align a value to the next multiple of \a size
-INLINE unsigned int align(unsigned int x, unsigned int size)
+INLINE uint align(uint x, uint size)
 {	return (x+size-1)/size*size;	}
+
 
 //! Truncates \a x to stay in range [\a min, \a max>
 /*!	\return Truncated value of \a x.
@@ -344,6 +394,33 @@ INLINE int reflect(int x, int min, int max)
 //! Wraps \a x to stay in range [\a min, \a max>
 INLINE int wrap(int x, int min, int max)
 {	return (x>=max) ? (x+min-max)	: ( (x<min) ? (x+max-min) : x );	}
+
+
+//! Get \a len long bitfield from \a y, starting at \a shift.
+/*!
+	@param y	Value containing bitfield.
+	@param shift	Bitfield Start;
+	@param len	Length of bitfield.
+	@return Bitfield between bits \a shift and \a shift + \a length.
+*/
+INLINE u32 bfGet(u32 y, uint shift, uint len)
+{	return (y>>shift) & ( (1<<len)-1 );		}
+
+
+//! Set \a len long bitfield from \a y, starting at \a shift to value \a x.
+/*!
+	@param y	Value containing bitfield.
+	@param x	New value for field.
+	@param shift	Bitfield Start;
+	@param len	Length of bitfield.
+	@return Bitfield between bits \a shift and \a shift + \a length.
+*/
+template<class T> 
+INLINE void bfSet(T &y, u32 x, uint shift, uint len)
+{
+	u32 mask= ((u32)(1<<len)-1);
+	y=  (y & ~(mask<<shift)) | (x & mask)<<shift;
+}
 
 
 //! Read a little-endian 16bit number.

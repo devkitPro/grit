@@ -1,9 +1,11 @@
 //
 //! \file grit_prep.cpp
 //!   Data preparation routines
-//! \date 20050814 - 20080211
+//! \date 20050814 - 20100131
 //! \author cearn
 /* === NOTES === 
+  * 20100131,jv: Replaced mapping core. grit_prep_tiles and older reducing 
+	functions still need cleaning.
   * 20080215,jv: made tile-size variable. Only works for -gb though.
   * 20080211,jv: pal-size not forced to 4-bytes anymore (as it should be).
   * 20080111,jv. Name changes, part 1
@@ -27,7 +29,6 @@
 // PROTOTYPES
 // --------------------------------------------------------------------
 
-
 bool grit_prep_work_dib(GritRec *gr);
 bool grit_prep_tiles(GritRec *gr);
 
@@ -40,6 +41,10 @@ bool grit_tile_cmp(BYTE *test, BYTE *base, u32 x_xor, u32 y_xor, BYTE mask);
 CLDIB *grit_tile_reduce(RECORD *dst, CLDIB *srcDib, u32 flags, CLDIB *extDib);
 RECORD *grit_meta_reduce(RECORD *dst, const RECORD *src, int metaN, u32 flags);
 
+
+// --------------------------------------------------------------------
+// CONSTANTS
+// --------------------------------------------------------------------
 
 // --------------------------------------------------------------------
 // FUNCTIONS
@@ -61,6 +66,16 @@ bool grit_prep(GritRec *gr)
 		return false;
 	}
 
+	if(gr->isTiled())
+	{
+		if(gr->isMapped())		// Convert to tilemap/tileset
+			grit_prep_map(gr);
+		else					// Just (meta)tile the image.
+			//# TODO: just (meta)tile; no map.
+			grit_prep_tiles(gr);
+	}
+
+/* OLD
 	// NOTE: don't check for -g! just yet: -g! + -m is possible too
 	// if tiles: prep tiles & map
 	grit_prep_tiles(gr);
@@ -70,13 +85,13 @@ bool grit_prep(GritRec *gr)
 		if(gr->mapProcMode != GRIT_EXCLUDE)
 			grit_prep_map(gr);
 	}
+*/
 
 	if(gr->gfxProcMode != GRIT_EXCLUDE)
 		grit_prep_gfx(gr);
 	
 	if(gr->palProcMode != GRIT_EXCLUDE)
 		grit_prep_pal(gr);
-
 
 	lprintf(LOG_STATUS, "Data preparation complete.\n");		
 	return true;
@@ -217,7 +232,7 @@ bool grit_prep_work_dib(GritRec *gr)
 				"    looking for color %02X%02X%02X in palette.\n", 
 				rgb->rgbRed, rgb->rgbGreen, rgb->rgbBlue);
 			
-			UINT ii_min= 0, dist, dist_min;
+			uint ii_min= 0, dist, dist_min;
 			dist_min= rgb_dist(rgb, &pal[0]);
 
 			for(ii=1; ii<256; ii++)
@@ -257,7 +272,7 @@ bool grit_prep_work_dib(GritRec *gr)
 			SWAP3(pal[0], pal[gr->palAlphaId], tmp);
 		}
 
-		//# TODO: Palette merging.
+		// TODO: Palette merging.
 		if(gr->palIsShared)
 		{
 			lprintf(LOG_STATUS, "  Palette merging\n");
@@ -291,31 +306,17 @@ bool grit_prep_tiles(GritRec *gr)
 	int metaW= gr->metaWidth, metaH= gr->metaHeight;
 
 	// Tiling sizes for stages
-	int blockW=256, blockH=256;						// For sbb tiling
 	int frameW=tileW*metaW, frameH=tileH*metaH;		// For meta tiling
 
-	bool bBlock= gr->mapProcMode==GRIT_EXPORT && gr->mapLayout == GRIT_MAP_REG;
-	bool bMeta= grit_is_metatiled(gr);
+	bool bMeta= gr->isMetaTiled();
 	bool bTile= tileW*tileH > 1;
 
 	// Change things for column-major ordering
 	if(gr->bColMajor)
 	{
 		int lastH= imgH, tmp;
-		if(bBlock)	SWAP3(blockH, lastH, tmp);
 		if(bMeta)	SWAP3(frameH, lastH, tmp);		
 		if(bTile)	SWAP3(tileH, lastH, tmp);
-	}
-
-	// Screen-block redim
-	if(bBlock)
-	{
-		lprintf(LOG_STATUS, "  tiling to 256x256 tiles.\n");
-		if(!dib_redim(gr->_dib, 256, 256, 0))
-		{
-			lprintf(LOG_ERROR, "  SBB tiling failed.\n");
-			return false;
-		}
 	}
 
 	// Meta redim
@@ -355,157 +356,155 @@ bool grit_prep_tiles(GritRec *gr)
 */
 bool grit_prep_map(GritRec *gr)
 {
-	lprintf(LOG_STATUS, "Map preparation.\n");		
-
-	if(gr->tileWidth != 8 || gr->tileHeight != 8)
+	if(dib_get_bpp(gr->_dib) < 8)
 	{
-		lprintf(LOG_ERROR, "  Mapping only works with 8x8 tiles (for now)\n");
+		lprintf(LOG_ERROR, "  Can't map for bpp<8.\n");
 		return false;
 	}
 
-	if(dib_get_bpp(gr->_dib) != 8)
+	CLDIB *workDib= gr->_dib;
+
+	// --- if SBB-mode, tile to 256x256. ---
+	if(gr->mapLayout == GRIT_MAP_REG)
 	{
-		lprintf(LOG_ERROR, "  Mapping only works on 8bpp images.\n");
-		return false;
-	}
+		lprintf(LOG_STATUS, "  tiling to Screenblock size (256x256p).\n");
 
-	int ii;
-	//u32 flags;
-
-	// map variabes
-	int mapW, mapH, mapN;
-	u16 *mapD;
-	RECORD mapRec= { 0, 0, NULL };
-	
-	//# flags= gr->map_flags;
-	mapW= (gr->areaRight-gr->areaLeft)/8;
-	mapH= (gr->areaBottom-gr->areaTop)/8;
-	mapN= mapW*mapH;
-
-	// Tileset variables
-	BYTE *tileD;
-	CLDIB *tileDib= gr->_dib, *rdxDib;
-
-	// --- Create base map ---
-
-	if(gr->mapRedux == GRIT_RDX_OFF)	// no reduction; tileD is all tiles
-	{
-		lprintf(LOG_STATUS, "  No tile reduction.\n");
-
-		mapRec.width= 2;
-		mapRec.height= mapN;
-		mapRec.data= (BYTE*)malloc(2*mapN);
-		mapD= (u16*)mapRec.data;
-
-		// point to tile data (== work dib)
-		tileD= dib_get_img(tileDib);
-		// map with palette info
-		for(ii=0; ii<mapN; ii++)
-			mapD[ii]= grit_find_tile_pal(&tileD[ii*64]) | (ii&SE_ID_MASK);
-	}
-	else					// reducing tiles
-	{
-		lprintf(LOG_STATUS, "  Performing tile reduction: tiles%s%s\n", 
-			(gr->mapRedux & GRIT_RDX_FLIP ? ", flip" : ""), 
-			(gr->mapRedux & GRIT_RDX_PAL  ? ", palette" : "") );
-
-		// Switch for possible shared data.
-		if(gr->gfxIsShared)
-			rdxDib= grit_tile_reduce(&mapRec, tileDib, gr->mapRedux, 
-				gr->shared->dib);
-		else
-			rdxDib= grit_tile_reduce(&mapRec, tileDib, gr->mapRedux, NULL);
-
-		if(rdxDib == NULL)
+		int blockW= 256, blockH= 256;
+		if(gr->bColMajor)
 		{
-			free(mapRec.data);
-			lprintf(LOG_ERROR, "  creation of tile DIB failed.\n");
+			blockW= dib_get_width(workDib);
+			blockH= dib_get_height(workDib);
+			dib_redim(workDib, 256, blockH, 0);
+		}
+
+		if(!dib_redim(workDib, blockW, blockH, 0))
+		{
+			lprintf(LOG_ERROR, "  SBB tiling failed.\n");
 			return false;
-		}
-		dib_free(gr->_dib);
-		gr->_dib= rdxDib;
-
-		// Make extra copy for external tile dib
-		// PONDER: do I really need a copy for this?
-		if(gr->gfxIsShared)
-		{
-			dib_free(gr->shared->dib);
-			gr->shared->dib= dib_clone(rdxDib);
-		}
-
+		}		
 	}
-	mapD= (u16*)mapRec.data;
 
-	// --- Map-entry offset ---
-	// NOTE: tile-index, flipping flags and color bank applied separately.
-	if(gr->mapOffset)
+	ETmapFlags flags;
+	Tilemap *metaMap= NULL, *map= NULL;
+	RECORD metaRec= { 0, 0, NULL }, mapRec= { 0, 0, NULL };
+	MapselFormat mf;
+
+	CLDIB *extDib= NULL;
+	int tileN= 0;
+	uint extW= 0, extH= 0, tileW= gr->tileWidth, tileH= gr->tileHeight;
+	uint mtileW= gr->mtileWidth(), mtileH= gr->mtileHeight();
+
+	if(gr->gfxIsShared)
 	{
-		lprintf(LOG_STATUS, "  Applying tile offset (0x%08X).\n", 
-			gr->mapOffset);
-
-		u32 me, base= gr->mapOffset &~ OFS_BASE0;
-		bool bBase0= (gr->mapOffset & OFS_BASE0) != 0;
-		for(ii=0; ii<mapN; ii++)
-		{
-			me= mapD[ii];
-			if(bBase0 || me)
-			{
-				u32 tmp;
-				tmp  = ((me + (base&SE_ID_MASK   )) & SE_ID_MASK   );
-				tmp |= ((me ^ (base&SE_FLIP_MASK )) & SE_FLIP_MASK );
-				tmp |= ((me + (base&SE_PBANK_MASK)) & SE_PBANK_MASK);
-				mapD[ii]= tmp;
-			}
-		}
+		extDib= gr->shared->dib;
+		extW= extDib ? dib_get_width(extDib) : 0;
+		extH= extDib ? dib_get_height(extDib) : 0;
 	}
 
-	// --- Create meta map ---
-	int metaW, metaH, metaN;
-	RECORD metaRec= { 0, 0, NULL };
-
-	metaW= gr->metaWidth;
-	metaH= gr->metaHeight;
-	metaN= metaW*metaH;
-	if(grit_is_metatiled(gr))
+	// --- If metatiled, convert to metatiles. ---
+	if(gr->isMetaTiled())
 	{
-		lprintf(LOG_STATUS, "  Performing metatile reduction (%d, %d).\n", 
-			metaW, metaH);
+		lprintf(LOG_STATUS, "  Performing metatile reduction: tiles%s%s\n", 
+			(gr->mapRedux & GRIT_META_PAL ? ", palette" : "") );
 
-		RECORD *rec= grit_meta_reduce(&metaRec, &mapRec, metaN, gr->mapRedux);
-
-		// Relay mapRec to use the reduced metatile set
-		if(rec)
+		flags  = TMAP_DEFAULT;
+		if(gr->mapRedux & GRIT_META_PAL)
+			flags |= TMAP_PBANK;
+		if(gr->bColMajor)
+			flags |= TMAP_COLMAJOR;
+	
+		metaMap= tmap_alloc();
+		if(extW == mtileW)
 		{
-			rec_alias(&mapRec, rec);
-			free(rec);
+			lprintf(LOG_STATUS, "  Using external metatileset.\n");
+			tmap_init_from_dib(metaMap, workDib, mtileW, mtileH, flags, extDib);
 		}
-		// PONDER: metamap compression?
-	}
-	mapD= (u16*)mapRec.data;
+		else
+			tmap_init_from_dib(metaMap, workDib, mtileW, mtileH, flags, NULL);
 
-	// Layout for affine (basically halfword->byte)
-	if(gr->mapLayout == GRIT_MAP_AFFINE)
+		mf= c_mapselGbaText;
+		tileN= tmap_get_tilecount(metaMap);
+		if(tileN >= (1<<mf.idLen))
+			lprintf(LOG_WARNING, "  Number of metatiles (%d) exceeds field limit (%d).\n", 
+				tileN, 1<<mf.idLen);
+
+		tmap_pack(metaMap, &metaRec, &mf);
+		if( BYTE_ORDER == BIG_ENDIAN && mf.bitDepth > 8 )
+			data_byte_rev(metaRec.data, metaRec.data, rec_size(&metaRec), mf.bitDepth/8);		
+
+		// Make temp copy for base-tiling and try to avoid aliasing pointers.
+		// Gawd, I hate manual mem-mgt >_<.
+		dib_free(workDib);
+		if(gr->bColMajor)
+			workDib= dib_redim_copy(metaMap->tiles, tileN*mtileW, mtileH, 0);
+		else
+			workDib= dib_clone(metaMap->tiles);
+	}
+
+	// ---Convert to base tiles. ---
+	flags = 0;
+	if(gr->mapRedux & GRIT_RDX_TILE)
+		flags |= TMAP_TILE;
+	if(gr->mapRedux & GRIT_RDX_FLIP)
+		flags |= TMAP_FLIP;
+	if(gr->mapRedux & GRIT_RDX_PBANK)
+		flags |= TMAP_PBANK;
+	if(gr->bColMajor)
+		flags |= TMAP_COLMAJOR;
+
+	lprintf(LOG_STATUS, "  Performing tile reduction: %s%s%s\n", 
+		(flags & TMAP_TILE  ? "unique tiles; " : ""), 
+		(flags & TMAP_FLIP  ? "flip; " : ""), 
+		(flags & TMAP_PBANK ? "palswap; " : "")); 
+
+	map= tmap_alloc();
+	if(extW == tileW)
 	{
-		lprintf(LOG_STATUS, "  Converting to affine layout.\n", 
-			metaW, metaH);
-
-		int size= rec_size(&mapRec);
-		BYTE *buf= (BYTE*)malloc(size);
-		if(buf != NULL)
-		{
-			size /= 2;
-			for(ii=0; ii<size; ii++)
-				buf[ii]= (BYTE)mapD[ii];
-			rec_attach(&mapRec, buf, 1, size);
-		}
+		lprintf(LOG_STATUS, "  Using external tileset.\n");
+		tmap_init_from_dib(map, workDib, tileW, tileH, flags, extDib);
 	}
-	if( BYTE_ORDER == BIG_ENDIAN && gr->mapLayout != GRIT_MAP_AFFINE )
-		data_byte_rev(mapRec.data, mapRec.data, rec_size(&mapRec), 2);		
+	else
+		tmap_init_from_dib(map, workDib, tileW, tileH, flags, NULL);
 
-	// Compress map
+	// --- Pack/Reformat and compress ---
+	//# TODO: allow custom mapsel format.
+	mf= gr->msFormat;
+
+	tileN= tmap_get_tilecount(metaMap);
+	if(tileN >= (1<<mf.idLen))
+		lprintf(LOG_WARNING, "  Number of tiles (%d) exceeds field limit (%d).\n", 
+			tileN, 1<<mf.idLen);
+
+	tmap_pack(map, &mapRec, &mf);
+
+	if( BYTE_ORDER == BIG_ENDIAN && mf.bitDepth > 8 )
+		data_byte_rev(mapRec.data, mapRec.data, rec_size(&mapRec), mf.bitDepth/8);		
+
 	grit_compress(&mapRec, &mapRec, gr->mapCompression);
+
+	// --- Cleanup ---
+
+	// Make extra copy for external tile dib.
+	if(gr->gfxIsShared)
+	{
+		dib_free(gr->shared->dib);
+
+		// Use metatileset for external, unless the old external was a 
+		// base tileset.
+		if(gr->isMetaTiled() && extW != tileW)
+			gr->shared->dib= dib_clone(metaMap->tiles);
+		else
+			gr->shared->dib= dib_clone(map->tiles);
+	}
+
+	// Attach tileset for later processing.
+	gr->_dib= tmap_detach_tiles(map);
+
 	rec_alias(&gr->_mapRec, &mapRec);
 	rec_alias(&gr->_metaRec, &metaRec);
+
+	tmap_free(map);
+	tmap_free(metaMap);
 
 	lprintf(LOG_STATUS, "Map preparation complete.\n");		
 	return true;
@@ -543,8 +542,7 @@ bool grit_prep_gfx(GritRec *gr)
 	// TODO: offset
 	if(srcB == 8 && srcB != dstB)
 	{
-		lprintf(LOG_STATUS, "  Bitpacking: %d -> %d.\n", 
-			srcB, dstB);
+		lprintf(LOG_STATUS, "  Bitpacking: %d -> %d.\n", srcB, dstB);
 		data_bit_pack(dstD, srcD, srcS, srcB, dstB, 0);
 	}
 	else
@@ -552,8 +550,8 @@ bool grit_prep_gfx(GritRec *gr)
 
 	RECORD rec= { 1, dstS, dstD };
 
-	if( BYTE_ORDER == BIG_ENDIAN && gr->gfxBpp == 16 )
-		data_byte_rev(rec.data, rec.data, rec_size(&rec), 2);		
+	if( BYTE_ORDER == BIG_ENDIAN && gr->gfxBpp > 8 )
+		data_byte_rev(rec.data, rec.data, rec_size(&rec), gr->gfxBpp/8);		
 
 	// attach and compress graphics
 	grit_compress(&rec, &rec, gr->gfxCompression);
@@ -584,8 +582,7 @@ bool grit_prep_pal(GritRec *gr)
 	palIn= &dib_get_pal(gr->_dib)[gr->palStart];
 
 	for(ii=0; ii<nclrs; ii++)
-		palOut[ii]= RGB16(palIn[ii].rgbBlue, palIn[ii].rgbGreen, 
-			palIn[ii].rgbRed);
+		palOut[ii]= RGB16(palIn[ii].rgbBlue, palIn[ii].rgbGreen, palIn[ii].rgbRed);
 
 	RECORD rec= { 2, palS/2, (BYTE*)palOut };
 
@@ -598,255 +595,6 @@ bool grit_prep_pal(GritRec *gr)
 
 	lprintf(LOG_STATUS, "Palette preparation complete.\n");		
 	return true;
-}
-
-
-// --------------------------------------------------------------------
-// HELPERS
-// --------------------------------------------------------------------
-
-
-//! Checks a tile for the palette bank. 
-/*!
-	\param tileD Tile data array (8x8\@8)
-	\return pal_id\<\<12.
-*/
-u16 grit_find_tile_pal(BYTE *tileD)
-{
-	int ii;
-	for(ii=0; ii<64; ii++)
-		if( (tileD[ii]&0x0F) != 0)
-			return (tileD[ii]&0xF0)<<8;
-	
-	return 0;
-}
-
-//! Compares 8x8 tiles \a test and \a base. 
-/*!	Both tiles must be 8x8\@8
-	\param test Data of the tile to test
-	\param base Data of the tile to compare \a test to.
-	\param x_xor Use 7 for horz-flip check, 0 for normal.
-	\param y_xor Use 7 for vert-flip check, 0 for normal.
-	\param mask Checks only specific bits.
-	  (0x0F for pal-banked, 0xFF for full palette)
-	\return \c true if tiles are equal, \c false of they're not.
-*/
-bool grit_tile_cmp(BYTE *test, BYTE *base, u32 x_xor, u32 y_xor, BYTE mask)
-{
-	int ix, iy;
-	for(iy=0; iy<8; iy++)
-	{
-		for(ix=0; ix<8; ix++)
-		{	
-			if( (test[(iy^y_xor)*8+(ix^x_xor)]&mask) != (base[iy*8+ix]&mask) )
-				return false;
-		}
-	}
-	return true;
-}
-
-//! Creates tilemap and reduces tileset
-/*!
-	\param dst		Record to receive the reduced map.
-	\param srcDib	Dib to map and tile-reduce.
-	\param flags	Reduction flags (\c GRIT_RDX_xxx combo).
-	\param extDib	External tileset.
-	\return	Reduced tileset.
-	\note	Both \a srcDib and \a extDib must already be in 8bpp 
-		tiled format!
-*/
-CLDIB *grit_tile_reduce(RECORD *dst, CLDIB *srcDib, u32 flags, CLDIB *extDib)
-{
-	// ASSERT(dst);
-	// ASSERT(srcDib);
-
-	if(dib_get_bpp(srcDib) != 8)
-		return NULL;
-
-	int srcW= dib_get_width(srcDib), srcH= dib_get_height(srcDib);
-	int srcN= srcW*srcH/64;		// # tiles in srcDib
-	int rdxN;					// # reduced tiles
-	
-	CLDIB *rdxDib;
-
-	if(extDib)
-	{
-		lprintf(LOG_STATUS, "Appending to external tileset.\n");
-				
-		// PONDER: check/fix tile_dib stuff here?
-		//   no, in validation (later)
-
-		int extH= dib_get_height(extDib);
-		rdxN= extH/8;
-		rdxDib= dib_alloc(8, (srcN + rdxN)*8, 8, NULL);
-		memcpy(dib_get_img(rdxDib), dib_get_img(extDib), rdxN*64);
-	}
-	else
-	{
-		lprintf(LOG_STATUS, "Creating new tileset.\n");	
-			
-		rdxN= 1;
-		rdxDib= dib_alloc(8, (srcN+rdxN)*8, 8, NULL);
-		memset(dib_get_img(rdxDib), 0, 64);
-	}
-
-	// assume worst case, srcN separate tiles (+1 for empty)
-	if(rdxDib == NULL)
-	{
-		lprintf(LOG_ERROR, "Can't allocate reduced tileset.\n");		
-		return NULL;
-	}
-
-	int mapS= 2*srcN;
-	rec_attach(dst, (BYTE*)malloc(mapS), 2, srcN);
-	if(dst->data == NULL)
-	{
-		lprintf(LOG_ERROR, "Can't allocate map buffer.\n");		
-		dib_free(rdxDib);
-		return NULL;
-	}
-	memset(dst->data, 0, mapS);
-
-	// # tiles in reduces set. Start at 1 because I want an empty 
-	// tile at the start
-	u32 se, clrmask;
-	clrmask= (flags&GRIT_RDX_PAL ? 0x0F : 0xFF);
-	u16 *mapD= (u16*)dst->data;
-
-	int ii, jj;
-	BYTE *srcD= dib_get_img(srcDib), *srcL= srcD;
-	BYTE *rdxD= dib_get_img(rdxDib), *rdxL= rdxD;
-
-	for(ii=0; ii<srcN; ii++)	// loop over all tiles
-	{
-		rdxL= rdxD;
-		se= 0;
-		for(jj=0; jj<rdxN; jj++)	// look over reduced tiles
-		{
-			// check for direct match
-			if(grit_tile_cmp(srcL, rdxL, 0, 0, clrmask) )
-				break;
-			// try flipped match, if desired
-			if(flags & GRIT_RDX_FLIP)
-			{
-				if(grit_tile_cmp(srcL, rdxL, 0, 7, clrmask) )
-				{	se |= SE_VFLIP;		break;	}
-				if(grit_tile_cmp(srcL, rdxL, 7, 0, clrmask) )
-				{	se |= SE_HFLIP;		break;	}
-				if(grit_tile_cmp(srcL, rdxL, 7, 7, clrmask) )
-				{	se |= SE_FLIP_MASK;	break;	}
-			}
-			rdxL += 64;
-		}
-
-		se |= jj & SE_ID_MASK;
-		// no match, add this tile to the set
-		if(jj == rdxN)
-		{
-			memcpy(&rdxD[rdxN*64], srcL, 64);	// PONDER: isn't this rdxL ?
-			rdxN++;
-		}
-		// Add palette info (Although adding pal-info even for 8bpp 
-		// wouldn't matter on the gba, it _would_ matter in terms of
-		// compression and meta-tiling.)
-		if(flags & GRIT_RDX_PAL)
-			se |= grit_find_tile_pal(srcL);
-
-		mapD[ii]= (u16)se;
-		srcL += 64;
-	}
-
-	// reduction complete, crop rdx dib and return home
-	CLDIB *dib= dib_alloc(8, rdxN*8, 8, rdxD);
-	if(dib != NULL)
-		memcpy(dib_get_pal(dib), dib_get_pal(srcDib), 
-			dib_get_nclrs(srcDib)*RGB_SIZE);
-
-	dib_free(rdxDib);
-
-	return dib;
-}
-
-//! Creates meta-map and reduces metatile set
-/*
-	\param dst Record to receive metamap.
-	\param src Record of the map to create metamap of.
-	\param tileN Number of tiles in a metatile.
-	\param flags Reduction flags.
-	\returns Metatile set (i.e. map-entry groups).
-*/
-RECORD *grit_meta_reduce(RECORD *dst, const RECORD *src, int tileN, u32 flags)
-{
-	// ASSERT(src);
-	// ASSERT(dst);
-	// ASSERT(metaN);
-	if(dst==NULL || src==NULL || src->data==NULL)
-		return NULL;
-
-	int srcS= rec_size(src), srcN= srcS/2;
-	int dstS= srcS/tileN, dstN=dstS/2;
-
-	u16 *srcD= (u16*)src->data;		// src: original map
-	u16 *dstD= (u16*)malloc(dstS);	// dst: metamap
-	u16 *mtsD= (u16*)malloc(srcS);	// mts: metatile set
-
-	if(dstD==NULL || mtsD==NULL)
-	{
-		free(dstD);
-		free(mtsD);
-		return NULL;
-	}
-
-	int ii, jj, kk, mm=0;
-
-	u32 mme, mask= (flags&GRIT_META_PAL ? 0x0FFF : 0xFFFF);
-	u16 *srcL= srcD, *mtsL= mtsD;
-	for(ii=0; ii<dstN; ii++)	// check all metamap entries
-	{
-		mtsL= mtsD;
-		for(jj=0; jj<mm; jj++)
-		{
-			for(kk=0; kk<tileN; kk++)
-				if( (srcL[kk]^mtsL[kk]) & mask )
-					break;
-			if(kk == tileN)	// found a match
-				break;
-			mtsL += tileN;
-		}
-		mme= jj;
-		if(jj == mm)	// new metatile, register it
-		{
-			memcpy(&mtsD[mm*tileN], srcL, tileN*2);
-			mm++;			
-		}
-		if(flags & GRIT_META_PAL)	// add metal tile palette info
-		{
-			for(jj=0; jj<tileN; jj++)
-			{
-				if( (srcL[jj]&0xF000) != 0)
-				{	mme |= (srcL[jj]&0xF000);	break;	}
-			}
-		}
-
-		dstD[ii]= mme;
-		srcL += tileN;
-	}
-
-	// attach metamap
-	rec_attach(dst, dstD, 2, dstN);
-
-	// create metatile record
-	int mtsS= 2*mm*tileN;
-	RECORD *mts= (RECORD*)malloc(sizeof(RECORD));
-
-	mts->width= 2;
-	mts->height= mtsS/2;
-	mts->data= (BYTE*)malloc(mtsS);
-	// PONDER: now why am I copying this again?
-	memcpy(mts->data, mtsD, mtsS);		
-	free(mtsD);
-
-	return mts;
 }
 
 // EOF

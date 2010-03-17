@@ -1,10 +1,11 @@
 //
 //! \file grit_core.cpp
 //!   Core grit routines
-//! \date 20050814 - 20081207
+//! \date 20050814 - 20100201
 //! \author cearn
 //
 /* === NOTES === 
+  * 20100201, jv: Removed validation parts that disallow mapping non-8bpp images.
   * 20080111, jv. Name changes, part 1
   * 20070227, jv: logging functions.
   * 20061010, jv: '-fa' now uses src for the sym-name if none is given.
@@ -17,7 +18,7 @@
 
 //#include <sys/param.h>
 
-#include <cldib_core.h>
+#include <cldib.h>
 #include "grit.h"
 
 
@@ -31,10 +32,10 @@ static const char __grit_app_string[]=
 "\t( http://www.coranac.com/projects/#grit )";
 
 
-const char *cFileTypes[GRIT_FTYPE_MAX]= {"c", "s", "bin", "gbfs", "grf" /*, "o"*/};
-const char *cCprs[GRIT_CPRS_MAX]= { "not", "lz77", "huf", "rle", "fake" };
-const char *cTypes[3]= { "u8", "u16", "u32" };
-const char *cAffix[E_AFX_MAX]= 
+const char *c_fileTypes[GRIT_FTYPE_MAX]= {"c", "s", "bin", "gbfs", "grf" /*, "o"*/};
+const char *c_cprsNames[GRIT_CPRS_MAX]= { "not", "lz77", "huf", "rle", "fake" };
+const char *c_identTypes[3]= { "u8", "u16", "u32" };
+const char *c_identAffix[E_AFX_MAX]= 
 {
 	"Tiles", "Bitmap", 
 	"Map", "Pal", 
@@ -42,6 +43,23 @@ const char *cAffix[E_AFX_MAX]=
 	"Grf"
 };
 
+const MapselFormat c_mapselGbaText= 
+{
+	0x00000000, 16,
+	0 , 10,		// index
+	10,  1,		// hflip
+	11,  1,		// vflip
+	12,  4,		// pbank
+};
+
+const MapselFormat c_mapselGbaAffine= 
+{
+	0x00000000, 8,
+	0 ,  8,		// index
+	10,  0,		// hflip
+	11,  0,		// vflip
+	12,  0,		// pbank
+};
 
 // --------------------------------------------------------------------
 // GLOBALS
@@ -136,7 +154,7 @@ void grit_init(GritRec *gr)
 	gr->mapCompression= GRIT_CPRS_OFF;
 	gr->mapRedux= GRIT_RDX_REG8;
 	gr->mapLayout= GRIT_MAP_FLAT;
-	gr->mapOffset= 0;
+	gr->msFormat= c_mapselGbaText;
 
 	// Extra tile options
 	gr->tileWidth= 0;
@@ -218,7 +236,7 @@ void grit_copy_options(GritRec *dst, const GritRec *src)
 	dst->mapCompression= src->mapCompression;
 	dst->mapRedux= src->mapRedux;
 	dst->mapLayout= src->mapLayout;
-	dst->mapOffset= src->mapOffset;
+	dst->msFormat= src->msFormat;
 
 	// Extra tile options	
 	dst->tileWidth= src->tileWidth;
@@ -346,7 +364,7 @@ void grit_dump(GritRec *gr, FILE *fp)
 	fprintf(fp, "%12s: pm:%d, dt:%d, cprs:%d\n", "map opts", 
 		gr->mapProcMode, gr->mapDataType, gr->mapCompression);
 
-	fprintf(fp, "%12s %d\n", "map ofs", gr->mapOffset);
+	fprintf(fp, "%12s %d\n", "map ofs", gr->msFormat.base);
 	fprintf(fp, "%12s [%d, %d]\n", "meta size", 
 		gr->metaWidth, gr->metaHeight);
 }
@@ -370,8 +388,8 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre)
 	{
 		fputs(pre, fp);
 		fprintf(fp, "%s%s : %s cprs, %s, [%d,%d>\n", 
-			gr->symName, cAffix[E_AFX_PAL],
-			cCprs[gr->palCompression], cTypes[gr->palDataType], 
+			gr->symName, c_identAffix[E_AFX_PAL],
+			c_cprsNames[gr->palCompression], c_identTypes[gr->palDataType], 
 			gr->palStart, gr->palEnd);
 	}
 
@@ -379,8 +397,8 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre)
 	{
 		fputs(pre, fp);
 		fprintf(fp, "%s%s : %s cprs, %s, %dbpp, +%d\n", 
-			gr->symName, cAffix[grit_is_bmp(gr) ? E_AFX_BMP : E_AFX_TILE],
-			cCprs[gr->gfxCompression], cTypes[gr->gfxDataType], 
+			gr->symName, c_identAffix[gr->isTiled() ? E_AFX_TILE : E_AFX_BMP],
+			c_cprsNames[gr->gfxCompression], c_identTypes[gr->gfxDataType], 
 			gr->gfxBpp, gr->gfxOffset);
 	}
 
@@ -389,20 +407,20 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre)
 		fputs(pre, fp);
 		fprintf(fp, "%s%s : %s cprs, %s, ", 
 			gr->symName, 
-			cAffix[grit_is_metatiled(gr) ? E_AFX_MTILE :  E_AFX_MAP],
-			cCprs[gr->mapCompression], cTypes[gr->mapDataType]);
+			c_identAffix[gr->isMetaTiled() ? E_AFX_MTILE :  E_AFX_MAP],
+			c_cprsNames[gr->mapCompression], c_identTypes[gr->mapDataType]);
 		if(gr->mapRedux)
 		{
 			fputs("-t", fp);
 			if(gr->mapRedux & GRIT_RDX_FLIP)
 				fputs("f", fp);
-			if(gr->mapRedux & GRIT_RDX_PAL)
+			if(gr->mapRedux & GRIT_RDX_PBANK)
 				fputs("p", fp);
 			fputs(", ", fp);
 		}
 		const char *layouts[]={ "reg flat", "reg sbb", "affine" };
 		fprintf(fp, "%s, +%d\n",
-			layouts[gr->mapLayout], gr->mapOffset);
+			layouts[gr->mapLayout], gr->msFormat.base);
 	}
 	fputs(pre, fp);
 	fprintf(fp, "Area : (%d,%d)-(%d,%d)    ", 
@@ -443,7 +461,7 @@ bool grit_validate_paths(GritRec *gr)
 		}
 
 		// Fix extension
-		path_repl_ext(str, gr->dstPath, cFileTypes[gr->fileType], MAXPATHLEN);
+		path_repl_ext(str, gr->dstPath, c_fileTypes[gr->fileType], MAXPATHLEN);
 		strrepl(&gr->dstPath, str);
 		path_fix_sep(gr->dstPath);
 
@@ -521,20 +539,23 @@ bool grit_validate_area(GritRec *gr)
 		if(gr->metaWidth  < 1)	gr->metaWidth = 1;
 		if(gr->metaHeight < 1)	gr->metaHeight= 1;
 
-		if(gr->gfxMode != GRIT_GFX_TILE)
+		if(gr->gfxMode == GRIT_GFX_TILE)
+		{
+			if(gr->tileWidth  < 4)	gr->tileWidth = 8;
+			if(gr->tileHeight < 4)	gr->tileHeight= 8;
+		}
+		else
 		{
 			if(gr->tileWidth  < 1)	gr->tileWidth = 1;
 			if(gr->tileHeight < 1)	gr->tileHeight= 1;
 		}
-		else
-			gr->tileWidth= gr->tileHeight= 8;
 
 		// Normally, the blocks are tw*mw, th*mh in size.
 		// But for SBB-aligned maps it's a little different.
 		if(!(gr->mapProcMode==GRIT_EXPORT && gr->mapLayout==GRIT_MAP_REG))
 		{
-			blockW= gr->metaWidth*gr->tileWidth;
-			blockH= gr->metaHeight*gr->tileHeight;
+			blockW= gr->mtileWidth();
+			blockH= gr->mtileHeight();
 		}
 		else
 			blockW= blockH= 256;
@@ -595,7 +616,7 @@ bool grit_validate(GritRec *gr)
 
 	// --- Options ---
 
-	// bpp must be 2^n; truecolor WILL be bitmaps
+	// bpp must be 2^n; truecolor WILL be bitmaps.
 	int bpp= gr->gfxBpp;
 	switch(bpp)
 	{
@@ -605,23 +626,12 @@ bool grit_validate(GritRec *gr)
 		break;
 	case 16: case 24: case 32:
 		gr->gfxBpp= 16;
-		if(gr->gfxMode==GRIT_GFX_TILE)
-			gr->gfxMode= GRIT_GFX_BMP;		// Set to bitmap
 
 		gr->mapProcMode= GRIT_EXCLUDE;	// No map. REPONDER
 		gr->palProcMode= GRIT_EXCLUDE;	// No pal either.
 		break;
 	default:
 		lprintf(LOG_ERROR, "  Bad bpp (%d).\n", bpp);
-		return false;
-	}
-
-
-	//# PONDER: mapping higher bpp might be useful after all.
-	// Bitmap - tilemap mismatch
-	if(gr->gfxMode != GRIT_GFX_TILE && gr->mapProcMode != GRIT_EXCLUDE)
-	{
-		lprintf(LOG_ERROR, "  Option mismatch: Can't map true-color bitmaps.\n");
 		return false;
 	}
 

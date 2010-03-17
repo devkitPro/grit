@@ -12,7 +12,7 @@
   * 20060725,jvijn: #ifdef around pure WIN32 functions
 */
 
-#include "cldib.h"
+#include "cldib_core.h"
 
 
 // --------------------------------------------------------------------

@@ -1,10 +1,13 @@
 //
 //! \file grit_main.cpp
 //!   Entry file for cmd-line grit.
-//! \date 20050913 - 20081207
+//! \date 20050913 - 20100204
 //! \author cearn
 //
 /* === NOTES ===
+  * 20100201, jv:
+    - Removed bpp and size restriction of external tileset.
+	- Added -mp and -mB options.
   * 20080223,jv: 
     - put version and completion indicators under LOG_STATUS.
 	- error codes for main() ... but they still need work.
@@ -57,13 +60,12 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre);
 // --------------------------------------------------------------------
 
 #ifndef GRIT_VERSION
-#define GRIT_VERSION	"0.8.3"
+#define GRIT_VERSION	"0.8.4"
 #endif
 
 #ifndef GRIT_BUILD
-#define GRIT_BUILD		"20081207"
+#define GRIT_BUILD		"20100204"
 #endif
-
 
 // --- Application constants ---
 
@@ -80,15 +82,12 @@ const char appHelpText[]=
 "-g | -g!       Include  or exclude gfx data [inc]\n"
 "-gu(8|16|32)   Gfx data type: u8, u16, u32 [u32]\n"
 "-gz[!lhr0]     Gfx compression: off, lz77, huff, RLE, off+header [off]\n"
-"-ga{n}         Gfx pixel offset (non-zero pixels) [0]\n"
-//"-gA{n}         Gfx pixel offset n (def=0) (all pixels) [0]\n"
+//"-ga{n}         Gfx pixel offset (non-zero pixels) [0]\n"
+//"-gA{n}         Gfx pixel offset n (all pixels) [0]\n"
 "-gb | -gt      Gfx format, bitmap or tile [tile]\n"
 "-gB{n}         Gfx bit depth (1, 2, 4, 8, 16) [img bpp]\n"
-"-gS			NEW: Shared graphics\n"
+"-gS            Shared graphics\n"
 "-gT{n}         Transparent color; rrggbb hex or 16bit BGR hex [FF00FF]\n"
-//"-g[l:r,t:b]    Area: x in [l,r>, y in [t,b>\n"
-//"-g[l+w,t+h]    Area: x in [l,l+w>, y in [t,t+h>\n"
-//"-g[w,h]        Area: x in [0,w>, y in [0,h> (def=full bitmap)\n"
 "-al{n}         Area left [0]\n"
 "-ar{n}         Area right (exclusive) [img width]\n"
 "-aw{n}         Area width [img width]. Overrides -ar\n"
@@ -100,6 +99,8 @@ const char appHelpText[]=
 "-mu(8|16|32)   Map data type: u8, u16, u32 [u16]\n"
 "-mz[!lhr0]     Map compression: off, lz77, huff, RLE, off+header [off]\n"
 "-ma{n}         Map-entry offset n (non-zero entries) [0]\n"
+"-mp{n}         NEW: Force mapsel palette to n\n"
+"-mB{n}:{(iphv[n])+}     NEW: Custom mapsel bitformat\n"
 //"-mA{n}         Map tile offset n (all entries) [0]\n"
 "-mR{t,p,f}     Tile reduction: (t)iles, (p)al, (f)lipped \n"
 "                 options can be combined [-mRtpf]\n"
@@ -114,35 +115,34 @@ const char appHelpText[]=
 "-ps{n}         Pal range start [0]\n"
 "-pe{n}         Pal range end (exclusive) [pal size]\n"
 "-pn{n}         Pal count [pal size]. Overrides -pe\n"
-"-pS            NEW: shared palette\n"
+"-pS            shared palette\n"
 "-pT{n}         Transparent palette index; swaps with index 0 [0]\n"
-//"-p[s:e]        Pal range: [s, e> (e exclusive)\n"
-//"-p[s+n]        Pal range: [s,s+n>\n"
-//"-p[n]          Pal range: [0,n> (def=all)\n"
 "--- Meta/Obj options (base: \"-M\") ---\n"
 //"-M | -M!       Include or exclude (def) metamap data\n"
-//"-M[w,h]        Metatile / obj sizes (in tiles!)\n"
 "-Mh{n}         Metatile height (in tiles!) [1]\n"
 "-Mw{n}         Metatile width (in tiles!) [1]\n"
 "-MRp           Metatile reduction (pal only) [none]\n"
 "\n--- File / var options ---\n"
 "-ft[!csbgr]    File type (no output, C, GNU asm, bin, gbfs, grf) [.s]\n"
-"-fr            NEW: Enable GRF-format for .c or .s\n"
+"-fr            Enable GRF-format for .c or .s\n"
 "-fa            File append\n"
 "-fh | -fh!     Create header or not [create header]\n"
 "-ff{name}      Additional options read from flag file [dst-name.grit]\n"
 "-fx{name}      External tileset file\n"
 "-o{name}       Destination filename [based on source]\n"
 "-s{name}       Symbol base name [based from dst]\n"
-"-O{name}		NEW: Destination file for shared data\n"
-"-S{name}		NEW: Symbol base name for shared data\n"
+"-O{name}       Destination file for shared data\n"
+"-S{name}       Symbol base name for shared data\n"
 "\n--- Misc ---\n"
-"-tc            NEW: Tiling in column-major order.\n"
-"-q             Quiet mode; no report at the end\n"
+"-tc            Tiling in column-major order.\n"
+"-tw            NEW(?): base tile width [8].\n"
+"-th            NEW(?): base tile height [8].\n"
+//"-q             Quiet mode; no report at the end\n"
 "-U(8|16|32)    All data type: u8, u16, u32\n"
 "-W{n}          Warning/log level 1, 2 or 3 [1]\n"
 "-Z[!lhr0]      All compression: off, lz77, huff, RLE, off+header [off]\n"
 "\nNew options: -fr, -ftr, -gS, -O, -pS, -S, -Z0 (et al)\n";
+
 
 
 // --------------------------------------------------------------------
@@ -152,6 +152,8 @@ const char appHelpText[]=
 bool grit_parse(GritRec *gr, const strvec &args);
 
 int grit_parse_cprs(const char *key, const strvec &args);
+bool grit_parse_mapsel_format(const char *key, MapselFormat *pmf);
+
 bool grit_parse_pal(GritRec *gr, const strvec &args);
 bool grit_parse_gfx(GritRec *gr, const strvec &args);
 bool grit_parse_map(GritRec *gr, const strvec &args);
@@ -184,7 +186,7 @@ int run_main(int argc, char **argv);
 int grit_parse_cprs(const char *key, const strvec &args)
 {
 	// compression
-	char *str= CLI_STR(key, "");
+	const char *str= CLI_STR(key, "");
 	switch(*str)
 	{
 	case 'h':	return GRIT_CPRS_HUFF;
@@ -197,7 +199,84 @@ int grit_parse_cprs(const char *key, const strvec &args)
 	}
 }
 
-//! Searches for palette options
+//! Parse mapsel-format string into the format proper.
+/*!
+	@param key	formatting string: "((\d):)?([iphv_]\d*)+"
+				- $1 : size of mapsel, in bits
+				- $2 : field descriptors. Character + size.
+				  * i : tile-index.
+				  * p : palette bank.
+				  * h : horizontal flip.
+				  * v : vertical flip.
+				  * _ : filler.
+				Format is big-endian, but right-aligned.
+	@param pmf	Pointer to struct to be filled in.
+	@return		Success-status of parsing.
+*/
+bool grit_parse_mapsel_format(const char *key, MapselFormat *pmf)
+{
+	if(isempty(key) || pmf == NULL)
+		return false;
+
+	MapselFormat mf;
+	memset(&mf, 0, sizeof(MapselFormat));
+
+	int c, val, nBits;
+	char *str= (char*)key;
+
+	nBits= strtoul(str, &str, 0);
+	if(*str == ':')
+		str++;
+
+	// --- Walk over all %c(%d) pairs. ---
+	int pos= 0;
+	while(*str)
+	{
+		c= *str++;
+		val= strtoul(str, &str, 0);
+		if(val<1) 
+			val= 1;
+
+		switch(c)
+		{
+		case 'i':		// index
+			mf.idShift= pos;	mf.idLen= val;		break;
+		case 'p':		// pbank
+			mf.pbShift= pos;	mf.pbLen= val;		break;
+		case 'h':		// hflip
+			mf.hfShift= pos;	mf.hfLen= val;		break;
+		case 'v':		// vflip
+			mf.vfShift= pos;	mf.vfLen= val;		break;
+		case '_':
+													break;
+		default:
+			lprintf(LOG_WARNING, "Unknown mapsel option %c.\n", c);
+			val= 0;
+		}
+		pos += val;
+	}
+
+	// --- Reverse-order fields ---
+	mf.idShift= pos - mf.idLen - mf.idShift;
+	mf.pbShift= pos - mf.pbLen - mf.pbShift;
+	mf.hfShift= pos - mf.hfLen - mf.hfShift;
+	mf.vfShift= pos - mf.vfLen - mf.vfShift;
+
+	// --- Fix mapsel size ---
+	if(nBits < pos || nBits > sizeof(long))
+		nBits= pos;
+	if(nBits < 8)
+		mf.bitDepth= ceilpo2(nBits);
+	else
+		mf.bitDepth= (nBits+7)/8*8;
+
+	*pmf= mf;
+
+	return true;
+}
+
+
+//! Searches for palette options.
 bool grit_parse_pal(GritRec *gr, const strvec &args)
 {
 	int val;
@@ -238,7 +317,7 @@ bool grit_parse_pal(GritRec *gr, const strvec &args)
 bool grit_parse_gfx(GritRec *gr, const strvec &args)
 {
 	int val;
-	char *pstr;
+	const char *pstr;
 
 	if(CLI_BOOL("-g!") == false)
 	{
@@ -259,10 +338,14 @@ bool grit_parse_gfx(GritRec *gr, const strvec &args)
 	//# -gf(t|b|ba|tx\d) ?
 
 	// Tile or bitmap format
-	if(CLI_BOOL("-gt"))
-		gr->gfxMode= GRIT_GFX_TILE;
-	else if(CLI_BOOL("-gb"))
+	if(CLI_BOOL("-gb"))
 		gr->gfxMode= GRIT_GFX_BMP;
+	else
+	{
+		if(!CLI_BOOL("-gt"))
+			lprintf(LOG_WARNING, "No main mode specified (-gt/-gb).\n");
+		gr->gfxMode= GRIT_GFX_TILE;
+	}
 
 	// Bitdepth override
 	if( (val= CLI_INT("-gB", 0)) != 0)
@@ -295,7 +378,7 @@ bool grit_parse_gfx(GritRec *gr, const strvec &args)
 bool grit_parse_map(GritRec *gr, const strvec &args)
 {
 	int val;
-	char *pstr;
+	const char *pstr;
 
 	// no map args or excluded	
 	if(!CLI_BOOL("-m") || CLI_BOOL("-m!"))
@@ -309,9 +392,6 @@ bool grit_parse_map(GritRec *gr, const strvec &args)
 	gr->mapDataType= CLI_INT("-mu", 16)>>4;
 	if( (val= grit_parse_cprs("-mz", args)) != -1 )
 		gr->mapCompression= val;
-
-	// Tile offset
-	gr->mapOffset= CLI_INT("-ma", 0);
 
 	// Tile reduction
 	pstr= CLI_STR("-mR", "");
@@ -327,10 +407,12 @@ bool grit_parse_map(GritRec *gr, const strvec &args)
 		if(strchr(pstr, 'f'))
 			gr->mapRedux |= GRIT_RDX_FLIP;
 		if(strchr(pstr, 'p'))
-			gr->mapRedux |= GRIT_RDX_PAL;
+			gr->mapRedux |= GRIT_RDX_PBANK;
 	}
 
-	// Map format
+	MapselFormat mf;
+
+	// --- Map layout and mapsel format ---
 	pstr= CLI_STR("-mL", "");
 	switch(pstr[0])
 	{
@@ -338,6 +420,37 @@ bool grit_parse_map(GritRec *gr, const strvec &args)
 	case 's':	gr->mapLayout= GRIT_MAP_REG;	break;
 	case 'a':	gr->mapLayout= GRIT_MAP_AFFINE;	break;
 	}
+
+	if(gr->mapLayout == GRIT_MAP_AFFINE)
+		mf= c_mapselGbaAffine;
+	else
+		mf= c_mapselGbaText;
+
+	pstr= CLI_STR("-mB", "");
+	if(pstr[0])
+		grit_parse_mapsel_format(pstr, &mf);
+
+	// Tile offset
+	mf.base= CLI_INT("-ma", 0);
+
+	// Force palette; implemented as -ma/-mR combo.
+	// PONDER: use separate options for this?
+	if( (val= CLI_INT("-mp", -1)) >= 0)
+	{
+		u32 pbank= bfGet(mf.base, mf.pbShift, mf.pbLen);
+		if(pbank != 0)
+			lprintf(LOG_WARNING, 
+"Option conflict: '-ma %04X' and '-mp%04X'\n'. Using -mp.\n", pbank, val);
+		bfSet(mf.base, val, mf.pbShift, mf.pbLen);
+
+		if(gr->mapRedux & GRIT_RDX_PBANK)
+			lprintf(LOG_WARNING, 
+"Option conflict: -mRp and -mp. Disabling palette reduction\n");
+		gr->mapRedux &= ~GRIT_RDX_PBANK;
+
+	}
+
+	gr->msFormat= mf;
 
 	return true;
 }
@@ -348,7 +461,8 @@ bool grit_parse_map(GritRec *gr, const strvec &args)
 bool grit_parse_file(GritRec *gr, const strvec &args)
 {
 	int ii;
-	char *pstr, *pext, str[MAXPATHLEN];
+	char *pstr;
+	char *pext, str[MAXPATHLEN];
 
 	gr->bHeader= !CLI_BOOL("-fh!");
 	gr->bAppend= CLI_BOOL("-fa");
@@ -385,7 +499,6 @@ bool grit_parse_file(GritRec *gr, const strvec &args)
 	// --- Symbol name ---
 	strrepl(&gr->symName, CLI_STR("-s", ""));
 
-
 	// --- Output name ---
 	pstr= CLI_STR("-o", "");
 	if( !isempty(pstr) )
@@ -397,9 +510,9 @@ bool grit_parse_file(GritRec *gr, const strvec &args)
 		pext= path_get_ext(pstr);
 		if( !CLI_BOOL("-ft") && !isempty(pext) )
 		{
-			for(ii=0; ii<countof(cFileTypes); ii++)
+			for(ii=0; ii<countof(c_fileTypes); ii++)
 			{
-				if(strcasecmp(pext, cFileTypes[ii]) == 0)
+				if(strcasecmp(pext, c_fileTypes[ii]) == 0)
 				{
 					gr->fileType= ii;
 					break;
@@ -514,16 +627,15 @@ bool grit_parse(GritRec *gr, const strvec &args)
 
 	// === (Meta)tiling options ===
 
-	// -gt effectively means 8x8 tiles; Only use -tw and -th 
-	// under -gb. This will change when I get the non-8x8@8 tile-mapping
-	// module in place.
-	// Yes I know this sounds odd. When your time machine is finished, 
-	// please go back to 2004-ish and tell me dividing things into 
-	// either tiled or bitmapped graphics would lead to trouble later on.
 	if(CLI_BOOL("-gb"))
 	{
 		gr->tileWidth= CLI_INT("-tw", 1);
 		gr->tileHeight= CLI_INT("-th", 1);
+	}
+	else
+	{
+		gr->tileWidth= CLI_INT("-tw", 8);
+		gr->tileHeight= CLI_INT("-th", 8);
 	}
 
 	// Meta size (in tiles!)
@@ -656,15 +768,13 @@ bool grit_load_ext_tiles(GritRec *gr)
 		return false;	
 	}
 
-	// Convert to 8xh@8 if necessary
-
-	if( dib_get_bpp(dib) != 8 )
+// Convert to 8xh@8 if necessary
+	if( dib_get_bpp(dib) < 8 )
 	{
-		lprintf(LOG_WARNING, "  External tileset must be 8bpp. Converting.\n");
-
+		lprintf(LOG_WARNING, "  External tileset bpp < 8. Converting to 8.\n");
 		dib_convert(dib, 8, 0);
 	}
-
+/*
 	// TODO: allow for metatiled sets
 	// PONDER: shouldn't this go somewhere else?
 	if( dib_get_width(dib) != 8 )
@@ -672,6 +782,7 @@ bool grit_load_ext_tiles(GritRec *gr)
 		lprintf(LOG_WARNING, "  External tileset not in tile format yet. Doing so now.\n");
 		dib_redim(dib, 8, 8, 0);
 	}
+*/
 
 	lprintf(LOG_STATUS, "  External tileset `%s' loaded\n", grs->tilePath);
 
@@ -874,10 +985,7 @@ int run_individual(GritRec *gr, const strvec &args, const strvec &fpaths)
 		if( !run_prep(gr, fpaths[ii]) )
 			return EXIT_FAILURE;
 
-		grit_parse(gr, args);
-
-		// Run and stuff
-		if( !grit_run(gr) )
+		if(!grit_parse(gr, args) || !grit_run(gr))
 		{
 			lprintf(LOG_ERROR, "Conversion failed for %s :( \n", fpaths[ii]);
 			return EXIT_FAILURE;
@@ -891,14 +999,15 @@ int run_individual(GritRec *gr, const strvec &args, const strvec &fpaths)
 */
 int run_shared(GritRec *gr, const strvec &args, const strvec &fpaths)
 {
-	unsigned int ii;
+	uint ii;
 	GritShared *grs= gr->shared;
 
 	lprintf(LOG_STATUS, "Shared-data run.\n");
 
 	// --- semi-dummy init for shared options ---
 	run_prep(gr, fpaths[0]);
-	grit_parse(gr, args);
+	if(!grit_parse(gr, args))
+		return EXIT_FAILURE;
 
 	grs->gfxBpp= gr->gfxBpp;
 
@@ -915,7 +1024,7 @@ int run_shared(GritRec *gr, const strvec &args, const strvec &fpaths)
 
 		// Parse options to init rest of GritRec
 		// Yes, re-parse for each file; I'm not convinced
-		// it'd work otherwise yet
+		// it'd work otherwise yet.
 		grit_parse(gr, args);
 
 		// Remove elements that are supposed to be shared.
@@ -1031,6 +1140,8 @@ int main(int argc, char **argv)
 	int result= run_main(argc, argv);
 
 	FreeImage_DeInitialise();
+
+	//system("pause");
 
 	return result;
 }

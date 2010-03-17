@@ -35,7 +35,6 @@ bool grit_compress(RECORD *dst, const RECORD *src, uint mode)
 
 	RECORD cprsRec= { 0, 0, NULL };
 
-
 	if(mode == GRIT_CPRS_OFF)
 	{
 		cprsRec= *src;
@@ -51,6 +50,7 @@ bool grit_compress(RECORD *dst, const RECORD *src, uint mode)
 			CPRS_LZ77_TAG, CPRS_HUFF8_TAG, CPRS_RLE_TAG, CPRS_FAKE_TAG 
 		};
 
+		//# FIXME: Wut?
 		lprintf(LOG_STATUS, "Compressing: %02x\n", mode, tags[mode]);
 
 		if(cprs_compress(&cprsRec, src, tags[mode]) != 0)

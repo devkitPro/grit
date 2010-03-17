@@ -104,7 +104,7 @@ char *path_get_dir(char *dst, const char *path, int size)
 	if(pc == NULL)
 	{
 		dst[0]= '\0';
-		return 0;
+		return NULL;
 	}
 
 	size= (size>pc-path ? pc-path : size);
@@ -118,20 +118,23 @@ char *path_get_title(char *dst, const char *path, int size)
 {
 	// ASSERT(path);
 	// ASSERT(dst);
-	if(!dst || !path)
-		return 0;
+	if(!dst)
+		return NULL;
 
-	if(path[0]=='\0')
+	if(isempty(path))
 	{
 		dst[0]= '\0';
-		return 0;
+		return NULL;
 	}
+
 	// Find directory part
 	const char *pc= strrchr(path, DIR_SEP);
 	if(pc)
 		path= pc+1;
+
 	// find extension part
 	pc= strrchr(path, '.');
+
 	// only copy the part between dir (if any) 
 	// and primary extension (if any)
 	int size2= pc ? pc-path : strlen(path);

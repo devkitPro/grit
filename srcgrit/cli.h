@@ -8,9 +8,9 @@
 
 typedef std::vector<char*> strvec;
 
-#define CLI_BOOL(_x) cli_bool(_x, args)
-#define CLI_INT(_x, _y) cli_int(_x, args, _y)
-#define CLI_STR(_x, _y) cli_str(_x, args, _y)
+#define CLI_BOOL(_key) cli_bool(_key, args)
+#define CLI_INT(_key, _dflt) cli_int(_key, args, _dflt)
+#define CLI_STR(_key, _dflt) cli_str(_key, args, _dflt)
 
 int cli_find_key(const char *key, const strvec &args);
 int cli_int(const char *key, const strvec &args, int dflt);

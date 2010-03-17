@@ -1,10 +1,11 @@
 //
 //! \file grit_xp.cpp
 //!   Exporter routines
-//! \date 20050814 - 2008207
+//! \date 20050814 - 20091231
 //! \author cearn
 //
 /* === NOTES ===
+  * 20091231,jv: use "static const" for size instead of "#define".
   * 20081129,jv:
 	- fixed grit_prep_grf. The GRF chunk itself should not have 
 	  an extra size field.
@@ -214,7 +215,7 @@ uint grit_xp_size(GritRec *gr)
 	if(gr->mapProcMode == GRIT_EXPORT)
 		size += ALIGN4(rec_size(&gr->_mapRec)) + extra;
 
-	if(gr->mapProcMode == GRIT_EXPORT && grit_is_metatiled(gr))
+	if(gr->mapProcMode == GRIT_EXPORT && gr->isMetaTiled())
 		size += ALIGN4(rec_size(&gr->_metaRec)) + extra;
 
 	if(gr->palProcMode == GRIT_EXPORT)
@@ -240,7 +241,7 @@ bool grit_prep_item(GritRec *gr, eint id, DataItem *item)
 		item->pRec= &gr->_gfxRec;
 
 		strcat(strcpy(str, gr->symName), 
-			cAffix[grit_is_bmp(gr) ? E_AFX_BMP : E_AFX_TILE]);
+			c_identAffix[gr->isTiled() ? E_AFX_TILE : E_AFX_BMP]);
 		strrepl(&item->name, str);
 		return true;
 
@@ -251,17 +252,17 @@ bool grit_prep_item(GritRec *gr, eint id, DataItem *item)
 		item->pRec= &gr->_mapRec;	
 
 		strcat(strcpy(str, gr->symName), 
-			cAffix[grit_is_metatiled(gr) ? E_AFX_MTILE : E_AFX_MAP]);
+			c_identAffix[gr->isMetaTiled() ? E_AFX_MTILE : E_AFX_MAP]);
 		strrepl(&item->name, str);
 		return true;
 
 	case GRIT_ITEM_METAMAP:		// Metamap item
-		item->procMode= grit_is_metatiled(gr) ? gr->mapProcMode : GRIT_EXCLUDE;
+		item->procMode= gr->isMetaTiled() ? gr->mapProcMode : GRIT_EXCLUDE;
 		item->dataType= gr->mapDataType;
 		item->compression= gr->mapCompression;
 		item->pRec= &gr->_metaRec;	
 
-		strcat(strcpy(str, gr->symName), cAffix[E_AFX_MMAP]);
+		strcat(strcpy(str, gr->symName), c_identAffix[E_AFX_MMAP]);
 		strrepl(&item->name, str);
 		return true;
 
@@ -271,7 +272,7 @@ bool grit_prep_item(GritRec *gr, eint id, DataItem *item)
 		item->compression= gr->palCompression;
 		item->pRec= &gr->_palRec;	
 
-		strcat(strcpy(str, gr->symName), cAffix[E_AFX_PAL]);
+		strcat(strcpy(str, gr->symName), c_identAffix[E_AFX_PAL]);
 		strrepl(&item->name, str);
 		return true;
 	}
@@ -300,8 +301,7 @@ bool grit_xp_c(GritRec *gr)
 	// Open 'output' file
 	strcpy(fpath, gr->dstPath);
 
-	lprintf(LOG_STATUS, "Export to C: %s into %s .\n", 
-		gr->symName, fpath);		
+	lprintf(LOG_STATUS, "Export to C: %s into %s .\n", gr->symName, fpath);		
 
 	// File doesn't exist -> write-mode only
 	if(!file_exists(fpath))
@@ -400,8 +400,7 @@ bool grit_xp_gas(GritRec *gr)
 	// Open 'output' file
 	strcpy(fpath, gr->dstPath);
 
-	lprintf(LOG_STATUS, "Export to GNU asm: %s into %s .\n", 
-		gr->symName, fpath);		
+	lprintf(LOG_STATUS, "Export to GNU asm: %s into %s .\n", gr->symName, fpath);		
 
 	// File doesn't exist -> write-mode only
 	if(!file_exists(fpath))
@@ -547,7 +546,7 @@ bool grit_xp_gbfs(GritRec *gr)
 	if(gr->gfxProcMode == GRIT_EXPORT)
 	{
 		grit_gbfs_entry_init(&gr_gben[ii], &gr->_gfxRec, 
-			gr->symName, (grit_is_bmp(gr) ? E_AFX_BMP : E_AFX_TILE));
+			gr->symName, (gr->isTiled() ? E_AFX_TILE : E_AFX_BMP));
 		gr_data[ii++]= gr->_gfxRec.data;
 	}
 
@@ -555,11 +554,11 @@ bool grit_xp_gbfs(GritRec *gr)
 	if(gr->mapProcMode == GRIT_EXPORT)
 	{
 		grit_gbfs_entry_init(&gr_gben[ii], &gr->_mapRec, 
-			gr->symName, (grit_is_metatiled(gr) ? E_AFX_MTILE :E_AFX_MAP));
+			gr->symName, (gr->isMetaTiled() ? E_AFX_MTILE :E_AFX_MAP));
 		gr_data[ii++]= gr->_mapRec.data;
 
 		// Meta map
-		if(grit_is_metatiled(gr))
+		if(gr->isMetaTiled())
 		{
 			grit_gbfs_entry_init(&gr_gben[ii], &gr->_metaRec, 
 				gr->symName, E_AFX_MMAP);
@@ -749,7 +748,7 @@ int grit_gbfs_entry_init(GBFS_ENTRY *gben, const RECORD *rec,
 	char name[32];
 	strncpy(name, basename, 21);
 	name[21]= '\0';
-	strcat(name, cAffix[affix]);
+	strcat(name, c_identAffix[affix]);
 
 	strncpy(gben->name, name, 24);
 	gben->len= ALIGN4(rec_size(rec));
@@ -867,7 +866,7 @@ chunk_t *grit_prep_grf(GritRec *gr)
 	const char *ckIDs[4]= 
 	{
 		"GFX ",
-		(grit_is_metatiled(gr)? "MTIL" : "MAP "),
+		(gr->isMetaTiled() ? "MTIL" : "MAP "),
 		"MMAP",	"PAL "
 	};
 	uint bpps[4]= { gr->gfxBpp, 16, 16, 16 };
@@ -883,7 +882,7 @@ chunk_t *grit_prep_grf(GritRec *gr)
 	hdr.tileWidth = gr->tileWidth;
 	hdr.tileHeight= gr->tileHeight;
 
-	if(grit_is_metatiled(gr))
+	if(gr->isMetaTiled())
 	{
 		hdr.metaWidth= gr->metaWidth;
 		hdr.metaHeight= gr->metaHeight;
@@ -976,9 +975,9 @@ bool xp_array_o(FILE *fp, const char *varname,
 */
 void grit_xp_decl(FILE *fp, int dtype, const char *name, int affix, int len)
 {
-	fprintf(fp, "#define %s%sLen %d\n", name, cAffix[affix], len);
+	fprintf(fp, "static const unsigned int %s%sLen = %d;\n", name, c_identAffix[affix], len);
 	fprintf(fp, "%s %s %s%s[%d];\n\n", cTypeSpec, cCTypes[dtype], 
-		name, cAffix[affix],  ALIGN4(len)/dtype);
+		name, c_identAffix[affix],  ALIGN4(len)/dtype);
 }
 
 void grit_xp_decl(FILE *fp, DataItem *item)
@@ -990,7 +989,7 @@ void grit_xp_decl(FILE *fp, DataItem *item)
 	uint dtype= grit_type_size(item->dataType);
 	uint count= ALIGN4(size)/dtype;
 
-	fprintf(fp, "#define %sLen %d\n", item->name, size);
+	fprintf(fp, "static const unsigned int %sLen = %d;\n", item->name, size);
 	fprintf(fp, "%s %s %s[%d];\n\n", cTypeSpec, cCTypes[dtype], 
 		item->name, count);
 }
@@ -1150,7 +1149,7 @@ bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 	{
 		tmp= rec_size(&gr->_palRec);
 		fprintf(fp, "%s\t+ palette %d entries, ", cmt, tmp/2);
-		fprintf(fp, "%s compressed\n", cCprs[gr->palCompression]);
+		fprintf(fp, "%s compressed\n", c_cprsNames[gr->palCompression]);
 		
 		sprintf(str2, "%d + ", tmp);
 		strcat(str, str2);
@@ -1173,7 +1172,7 @@ bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 				fputs("(t", fp);
 				if(gr->mapRedux & GRIT_RDX_FLIP)
 					fputs("|f", fp);
-				if(gr->mapRedux & GRIT_RDX_PAL)
+				if(gr->mapRedux & GRIT_RDX_PBANK)
 					fputs("|p", fp);
 				fputs(" reduced) ", fp);
 			}
@@ -1189,7 +1188,7 @@ bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 			break;
 		}
 
-		fprintf(fp, "%s compressed\n", cCprs[gr->gfxCompression]);
+		fprintf(fp, "%s compressed\n", c_cprsNames[gr->gfxCompression]);
 
 		tmp= rec_size(&gr->_gfxRec);
 		sprintf(str2, "%d + ", tmp);
@@ -1211,7 +1210,7 @@ bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 			fputs("affine map, ", fp);				break;
 		}
 
-		fprintf(fp, "%s compressed, ", cCprs[gr->mapCompression]);
+		fprintf(fp, "%s compressed, ", c_cprsNames[gr->mapCompression]);
 		
 		tmp= rec_size(&gr->_mapRec);
 		sprintf(str2, "%d + ", tmp);
@@ -1219,7 +1218,7 @@ bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 		size += tmp;
 
 		fprintf(fp, "%dx%d \n", aw/mw/8, ah/mh/8);
-		if(grit_is_metatiled(gr))
+		if(gr->isMetaTiled())
 		{
 			fprintf(fp, "%s\tMetatiled by %dx%d\n", cmt, mw, mh);
 			tmp= rec_size(&gr->_metaRec);

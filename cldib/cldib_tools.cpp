@@ -182,7 +182,7 @@ bool data_redim(const RECORD *src, RECORD *dst, int tileH, int tileN)
 
 	BYTE *srcL, *dstL;
 
-	if(srcW == dstW)		// srcW == tileH, already tiled
+	if(srcW == dstW)		// srcW == tileW, already tiled
 	{
 		dst->height= srcH;
 		dst->data= (BYTE*)malloc(srcW*srcH);

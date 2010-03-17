@@ -20,6 +20,7 @@
 #define __GRIT_CORE_H__
 
 #include "cldib_core.h"
+#include "cldib_tmap.h"
 
 
 /*! \addtogroup grpGrit
@@ -29,21 +30,7 @@
 
 // === TYPES ==========================================================
 
-#ifndef GBA_BASETYPES
-#define GBA_BASETYPES
-
-typedef unsigned char  u8 , uchar, echar;
-typedef unsigned short u16, ushort, eshort;
-typedef unsigned int   u32, uint, eint;
-
-typedef signed char  s8;
-typedef signed short s16; 
-typedef signed int   s32;
-
 typedef u16 COLOR;
-
-#endif	// GBA_BASETYPES
-
 
 // --------------------------------------------------------------------
 // CONSTANTS
@@ -51,11 +38,11 @@ typedef u16 COLOR;
 
 
 #ifndef LIBGRIT_VERSION
-#define LIBGRIT_VERSION	"0.8.3"
+#define LIBGRIT_VERSION	"0.8.4a"
 #endif
 
 #ifndef LIBGRIT_BUILD
-#define LIBGRIT_BUILD	"20081207"
+#define LIBGRIT_BUILD	"20091231"
 #endif
 
 
@@ -115,7 +102,7 @@ enum EGritMapRedux
 	GRIT_RDX_TILE	= 0x01,	//!< Reduce for all tiles `-mRt'
 //	GRIT_RDX_BLANK	= 0x02,	//!< Reduce for blank tiles only `-mRb'
 	GRIT_RDX_FLIP	= 0x04,	//!< Reduce for flipped tiles `-mRf'
-	GRIT_RDX_PAL	= 0x08,	//!< Reduce for palette-swapped tiles `-mRp'
+	GRIT_RDX_PBANK	= 0x08,	//!< Reduce for palette-swapped tiles `-mRp'
 	GRIT_RDX_AFF	= 0x01,	//!< Recommended rdx flags for affine bgs  `-mRa' (= -mRt)
 	GRIT_RDX_REG4	= 0x0D,	//!< Recommended rdx flags for 4bpp reg bgs `-mR4' (= -mRtfp)
 	GRIT_RDX_REG8	= 0x05,	//!< Recommended rdx flags for 8bpp reg bgs `-mR8' (= -mRtf)
@@ -159,7 +146,7 @@ enum EGrsMode
 
 // --- GBA constants ---
 // screen map flags
-enum EScreenFlags
+enum ScreenEntryFlags
 {
 	SE_HFLIP		=	0x0400,	//!< Horizontal flip flag
 	SE_VFLIP		=	0x0800,	//!< Vertical flip flag
@@ -168,8 +155,8 @@ enum EScreenFlags
 	SE_ID_SHIFT		=		 0,
 	SE_FLIP_MASK	=	0x0C00,
 	SE_FLIP_SHIFT	=		10,
-	SE_PBANK_MASK	=	0xF000,
-	SE_PBANK_SHIFT	=		12,
+	SE_PAL_MASK		=	0xF000,
+	SE_PAL_SHIFT	=		12,
 };
 
 #define GBA_RED_MASK	0x001F
@@ -198,10 +185,13 @@ enum eAffix
 	E_AFX_MAX
 };
 
-extern const char *cFileTypes[GRIT_FTYPE_MAX];
-extern const char *cTypes[3];
-extern const char *cAffix[E_AFX_MAX];
-extern const char *cCprs[GRIT_CPRS_MAX];
+extern const char *c_fileTypes[GRIT_FTYPE_MAX];
+extern const char *c_identTypes[3];
+extern const char *c_identAffix[E_AFX_MAX];
+extern const char *c_cprsNames[GRIT_CPRS_MAX];
+
+extern const MapselFormat c_mapselGbaText;
+extern const MapselFormat c_mapselGbaAffine;
 
 
 // --------------------------------------------------------------------
@@ -224,6 +214,33 @@ struct GritShared
 //! Basic grit struct
 struct GritRec 
 {
+// --- Attributes ---
+
+	//! Is this a tiled conversion?
+	bool	isTiled() const
+	{	return gfxMode == GRIT_GFX_TILE;					}
+
+		//! Is this a bitmapped conversion?
+	bool	isBitmap() const
+	{	return gfxMode != GRIT_GFX_TILE;					}
+
+	//! Should we tilemap?
+	bool	isMapped() const	
+	{	return isTiled() && mapProcMode != GRIT_EXCLUDE;	}
+
+	//! Should we metatile?
+	bool	isMetaTiled() const	
+	{	return metaWidth*metaHeight > 1;					}
+
+	uint	mtileWidth() const
+	{	return metaWidth*tileWidth;							}
+
+	uint	mtileHeight() const
+	{	return metaHeight*tileHeight;						}
+
+
+// --- Members ---
+
 // public:
 
 // Source stuff
@@ -249,9 +266,9 @@ struct GritRec
 	echar	 gfxDataType;	//!< Graphics data type (-gu{num} ).
 	echar	 gfxCompression;	//!< Graphics compression type
 	echar	 gfxMode;		//!< Graphics mode (tile, bmp, bmpA).
+	u8		 gfxBpp;		//!< Output bitdepth (-gB{num} ).
 	bool	 gfxHasAlpha;	//!< Input image has transparent color.
 	RGBQUAD	 gfxAlphaColor;	//!< Transparent color (-gT {num} ). 
-	u8		 gfxBpp;		//!< Output bitdepth (-gB{num} ).
 	u32		 gfxOffset;		//!< Pixel value offset (-ga {num}).
 	bool	 gfxIsShared;	//!< Graphics are shared (-gS).
 		
@@ -261,7 +278,8 @@ struct GritRec
 	echar	 mapCompression;	//!< Map compression type (-mz{char} ).
 	echar	 mapRedux;		//!< Map tile-reduction mode (-mR[tpf,48a] ).
 	echar	 mapLayout;		//!< Map layout mode (-mL{char} ).
-	u32		 mapOffset;		//!< Map-entry tile-value offset (-ma {num}).
+	//u32		 mapOffset;		//!< Map-entry tile-value offset (-ma {num}).
+	MapselFormat	msFormat;	//!< Format describing packed mapsels (GBA Text entries).
 
 // (Meta-)tiles/map:
 	u8		 tileWidth;		//!< Tile width (in pixels) (-tw{num} ).
@@ -341,9 +359,6 @@ void grs_run(GritShared *grs, GritRec *gr_base);
 
 INLINE int grit_type_size(u8 type);
 
-INLINE bool grit_is_tiled(const GritRec *gr);
-INLINE bool grit_is_bmp(const GritRec *gr);
-INLINE bool grit_is_metatiled(const GritRec *gr);
 
 // --------------------------------------------------------------------
 // MACROS
@@ -353,7 +368,6 @@ INLINE bool grit_is_metatiled(const GritRec *gr);
 //! Create a GBA BGR color
 #define GBA_RGB16(r, g, b)	( (r) | ((g)<<5) | ((b)<<10) )
 
-
 /*!	\}	*/
 
 // --------------------------------------------------------------------
@@ -362,21 +376,6 @@ INLINE bool grit_is_metatiled(const GritRec *gr);
 
 INLINE int grit_type_size(u8 type)
 {	return 1<<type;									}
-
-
-//! See if the graphics are in tiled mode.
-INLINE bool grit_is_tiled(const GritRec *gr)
-{	return gr->gfxMode == GRIT_GFX_TILE;			}
-
-
-//! See if the graphics are in bitmap mode.
-INLINE bool grit_is_bmp(const GritRec *gr)
-{	return gr->gfxMode != GRIT_GFX_TILE;			}
-
-
-//! See if there is meta-tiling.
-INLINE bool grit_is_metatiled(const GritRec *gr)
-{	return gr->metaWidth*gr->metaHeight > 1;		}
 
 
 #endif // __GRIT_CORE_H__
