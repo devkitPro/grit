@@ -5,6 +5,9 @@
 //! \author cearn
 //
 /* === NOTES ===
+
+  * 20100321,dm: static const is not a constant expression in c
+    switch back to define.
   * 20091231,jv: use "static const" for size instead of "#define".
   * 20081129,jv:
 	- fixed grit_prep_grf. The GRF chunk itself should not have 
@@ -975,7 +978,7 @@ bool xp_array_o(FILE *fp, const char *varname,
 */
 void grit_xp_decl(FILE *fp, int dtype, const char *name, int affix, int len)
 {
-	fprintf(fp, "static const unsigned int %s%sLen = %d;\n", name, c_identAffix[affix], len);
+	fprintf(fp, "#define %s%sLen %d\n", name, c_identAffix[affix], len);
 	fprintf(fp, "%s %s %s%s[%d];\n\n", cTypeSpec, cCTypes[dtype], 
 		name, c_identAffix[affix],  ALIGN4(len)/dtype);
 }
@@ -989,7 +992,7 @@ void grit_xp_decl(FILE *fp, DataItem *item)
 	uint dtype= grit_type_size(item->dataType);
 	uint count= ALIGN4(size)/dtype;
 
-	fprintf(fp, "static const unsigned int %sLen = %d;\n", item->name, size);
+	fprintf(fp, "#define %sLen %d\n", item->name, size);
 	fprintf(fp, "%s %s %s[%d];\n\n", cTypeSpec, cCTypes[dtype], 
 		item->name, count);
 }
