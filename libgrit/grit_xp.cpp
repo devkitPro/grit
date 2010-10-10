@@ -71,6 +71,18 @@ public:
 
 bool grit_prep_item(GritRec *gr, eint id, DataItem *item);
 
+struct ule32 {
+	unsigned int i;
+	#if BYTE_ORDER == LITTLE_ENDIAN
+		operator unsigned int () { return i; }
+		unsigned int & operator = (unsigned int i) { return this->i = i; }
+	#else
+		operator unsigned int () { return i<<24 | i<<8&0xFF0000 | i>>8&0xFF00 | i>>24; }
+		unsigned int & operator = (unsigned int i) { return this->i = i<<24 | i<<8&0xFF0000 | i>>8&0xFF00 | i>>24; }
+	#endif
+	ule32() {}
+	ule32(unsigned int i) { *this = i; }
+};
 
 // --- GBFS components ---
 
@@ -105,7 +117,7 @@ int grit_gbfs_entry_init(GBFS_ENTRY *gben, const RECORD *rec,
 struct chunk_t
 {
 	char	id[4];
-	u32		size;
+	ule32	size;
 	u8		data[1];
 };
 
@@ -117,9 +129,9 @@ struct GrfHeader
 			u8	gfxAttr, mapAttr, mmapAttr, palAttr;
 		};
 	};
-	u8	tileWidth, tileHeight;
-	u8	metaWidth, metaHeight;
-	u32	gfxWidth, gfxHeight;
+	u8		tileWidth, tileHeight;
+	u8		metaWidth, metaHeight;
+	ule32	gfxWidth, gfxHeight;
 };
 
 chunk_t *chunk_create(const char *id, const RECORD *rec);
