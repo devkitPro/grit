@@ -46,7 +46,7 @@
 
 
 // Constructor / Destructor
-WuQuantizer::WuQuantizer(CLDIB *dib)
+dibWuQuantizer::dibWuQuantizer(CLDIB *dib)
 {
 	mWidth = dib_get_width(dib);
 	mHeight = dib_get_height(dib);
@@ -85,7 +85,7 @@ WuQuantizer::WuQuantizer(CLDIB *dib)
 	memset(Qadd, 0, mWidth*mHeight * sizeof(WORD));
 }
 
-WuQuantizer::~WuQuantizer()
+dibWuQuantizer::~dibWuQuantizer()
 {
 	SAFE_FREE(Qadd);
 	SAFE_FREE(mb);
@@ -102,7 +102,7 @@ WuQuantizer::~WuQuantizer()
 
 // Build 3-D color histogram of counts, r/g/b, c^2
 void 
-WuQuantizer::Hist3D(LONG *vwt, LONG *vmr, LONG *vmg, LONG *vmb, float *m2)
+dibWuQuantizer::Hist3D(LONG *vwt, LONG *vmr, LONG *vmg, LONG *vmb, float *m2)
 {
 	int ii, ix, iy;
 	int inr, ing, inb;
@@ -157,7 +157,7 @@ WuQuantizer::Hist3D(LONG *vwt, LONG *vmr, LONG *vmg, LONG *vmb, float *m2)
 
 // Compute cumulative moments
 void 
-WuQuantizer::M3D(LONG *vwt, LONG *vmr, LONG *vmg, LONG *vmb, float *m2)
+dibWuQuantizer::M3D(LONG *vwt, LONG *vmr, LONG *vmg, LONG *vmb, float *m2)
 {
 	WORD ind1, ind2;
 	BYTE ii, ir, ig, ib;
@@ -204,7 +204,7 @@ WuQuantizer::M3D(LONG *vwt, LONG *vmr, LONG *vmg, LONG *vmb, float *m2)
 
 // Compute sum over a box of any given statistic
 LONG 
-WuQuantizer::Vol( Box *cube, LONG *mmt ) 
+dibWuQuantizer::Vol( Box *cube, LONG *mmt ) 
 {
 	return  ( mmt[INDEX(cube->r1, cube->g1, cube->b1)] 
 			- mmt[INDEX(cube->r1, cube->g1, cube->b0)]
@@ -227,7 +227,7 @@ WuQuantizer::Vol( Box *cube, LONG *mmt )
 // (depending on dir)
 
 LONG 
-WuQuantizer::Bottom(Box *cube, BYTE dir, LONG *mmt)
+dibWuQuantizer::Bottom(Box *cube, BYTE dir, LONG *mmt)
 {
 	switch(dir)
 	{
@@ -258,7 +258,7 @@ WuQuantizer::Bottom(Box *cube, BYTE dir, LONG *mmt)
 // r1, g1, or b1 (depending on dir)
 
 LONG 
-WuQuantizer::Top(Box *cube, BYTE dir, int pos, LONG *mmt)
+dibWuQuantizer::Top(Box *cube, BYTE dir, int pos, LONG *mmt)
 {
 	switch(dir)
 	{
@@ -288,7 +288,7 @@ WuQuantizer::Top(Box *cube, BYTE dir, int pos, LONG *mmt)
 // Compute the weighted variance of a box 
 // NB: as with the raw statistics, this is really the variance * ImageSize 
 float 
-WuQuantizer::Var(Box *cube)
+dibWuQuantizer::Var(Box *cube)
 {
 	float dr = (float) Vol(cube, mr); 
 	float dg = (float) Vol(cube, mg); 
@@ -313,7 +313,7 @@ WuQuantizer::Var(Box *cube)
 // so we drop the minus sign and MAXIMIZE the sum of the two terms.
 
 float
-WuQuantizer::Maximize(Box *cube, BYTE dir, int first, int last, int *cut, 
+dibWuQuantizer::Maximize(Box *cube, BYTE dir, int first, int last, int *cut, 
 	LONG whole_r, LONG whole_g, LONG whole_b, LONG whole_w)
 {
 	int ii;
@@ -359,7 +359,7 @@ WuQuantizer::Maximize(Box *cube, BYTE dir, int first, int last, int *cut,
 }
 
 bool
-WuQuantizer::Cut(Box *set1, Box *set2) 
+dibWuQuantizer::Cut(Box *set1, Box *set2) 
 {
 	BYTE dir;
 	int cutr, cutg, cutb;
@@ -425,7 +425,7 @@ WuQuantizer::Cut(Box *set1, Box *set2)
 
 
 void
-WuQuantizer::Mark(Box *cube, int label, BYTE *tag) 
+dibWuQuantizer::Mark(Box *cube, int label, BYTE *tag) 
 {
 	int r, g, b;
     for(r= cube->r0 + 1; r <= cube->r1; r++)
@@ -436,7 +436,7 @@ WuQuantizer::Mark(Box *cube, int label, BYTE *tag)
 
 // Wu Quantization algorithm
 CLDIB *
-WuQuantizer::Quantize(int PalSize)
+dibWuQuantizer::Quantize(int PalSize)
 {
 	int ii, jj;
 	BYTE *tag= NULL;

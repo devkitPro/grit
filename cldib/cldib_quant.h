@@ -19,7 +19,7 @@ struct CLDIB;
 //  (see Graphics Gems vol. II, pp. 126-133)
 // 
 //  Copied almost literally from FreeImage 3.6
-class WuQuantizer
+class dibWuQuantizer
 {
 public:
 
@@ -54,9 +54,9 @@ protected:
 
 public:
 	// Constructor - Input parameter: DIB 24-bit to be quantized
-    WuQuantizer(CLDIB *dib);
+    dibWuQuantizer(CLDIB *dib);
 	// Destructor
-	~WuQuantizer();
+	~dibWuQuantizer();
 	// Quantizer - Return value: quantized 8-bit (color palette) DIB
 	CLDIB* Quantize(int PalSize);
 };

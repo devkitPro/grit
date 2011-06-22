@@ -341,7 +341,7 @@ CLDIB *dib_true_to_8_copy(CLDIB *src, int nclrs)
 		return NULL;
 	try
 	{
-		WuQuantizer wuq(src);
+		dibWuQuantizer wuq(src);
 		dst= wuq.Quantize(nclrs);
 	}
 	catch(...) {}
