@@ -35,6 +35,7 @@ bool grit_prep_tiles(GritRec *gr);
 bool grit_prep_gfx(GritRec *gr);
 bool grit_prep_map(GritRec *gr);
 bool grit_prep_pal(GritRec *gr);
+bool grit_prep_shared_pal(GritRec *gr);
 
 u16 grit_find_tile_pal(BYTE *tileD);
 bool grit_tile_cmp(BYTE *test, BYTE *base, u32 x_xor, u32 y_xor, BYTE mask);
@@ -594,6 +595,47 @@ bool grit_prep_pal(GritRec *gr)
 	rec_alias(&gr->_palRec, &rec);
 
 	lprintf(LOG_STATUS, "Palette preparation complete.\n");		
+	return true;
+}
+
+//! Shared Palette data preparation
+/*!	Converts palette to 16bit GBA colors, compresses it and fills in
+	\a gr._palRec.
+*/
+bool grit_prep_shared_pal(GritRec *gr)
+{
+	lprintf(LOG_STATUS, "Palette preparation.\n");
+
+	int ii, nclrs, palS, totalClrs;
+	COLOR *palOut;
+	RGBQUAD *palIn;
+
+	nclrs= gr->palEnd - gr->palStart;
+	if(gr->shared->palRec.height < nclrs && nclrs != 0)
+		nclrs= gr->shared->palRec.height;
+
+    totalClrs = 256;
+
+	palS= totalClrs*sizeof(COLOR);
+	palOut= (COLOR*)malloc(palS);
+	palIn= (RGBQUAD*)(&gr->shared->palRec.data[gr->palStart]);
+
+	for(ii=0; ii<nclrs; ii++)
+		palOut[ii]= RGB16(palIn[ii].rgbBlue, palIn[ii].rgbGreen, palIn[ii].rgbRed);
+
+    for(ii = nclrs; ii < totalClrs; ii++)
+        palOut[ii] = 0;
+
+	RECORD rec= { 2, palS/2, (BYTE*)palOut };
+
+	if( BYTE_ORDER == BIG_ENDIAN )
+		data_byte_rev(rec.data, rec.data, rec_size(&rec), 2);
+
+	// Attach and compress palette
+	grit_compress(&rec, &rec, gr->palCompression);
+	rec_alias(&gr->_palRec, &rec);
+
+	lprintf(LOG_STATUS, "Palette preparation complete.\n");
 	return true;
 }
 

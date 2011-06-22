@@ -101,13 +101,13 @@ void grs_run(GritShared *grs, GritRec *gr_base)
 			break;
 
 		bool grit_prep_gfx(GritRec *gr);
-		bool grit_prep_pal(GritRec *gr);
+		bool grit_prep_shared_pal(GritRec *gr);
 
 		if(gr->gfxProcMode != GRIT_EXCLUDE)
 			grit_prep_gfx(gr);
 		
 		if(gr->palProcMode != GRIT_EXCLUDE)
-			grit_prep_pal(gr);
+			grit_prep_shared_pal(gr);
 
 		if(gr->bExport)
 			grit_export(gr);
