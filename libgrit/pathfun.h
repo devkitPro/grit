@@ -114,6 +114,7 @@ bool xp_data_c(FILE *fp, const void *data, int len, int chunk);
 bool xp_array_gas(FILE *fp, const char *symname, 
 	const void *data, int len, int chunk);
 bool xp_data_gas(FILE *fp, const void *data, int len, int chunk);
+bool im_data_gas(FILE* fp, const char *name, const void *_data, int *len, int *chunk);
 
 bool xp_data_bin(const char *fname, 
 	const void *data, int len, const char *fmode);

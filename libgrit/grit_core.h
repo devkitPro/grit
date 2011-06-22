@@ -196,7 +196,8 @@ struct GritShared
 	echar	 sharedMode;	//!< Main mode.
 	echar	 logMode;		//!< Logging level
 	char	*tilePath;		//!< Path to external tileset (can be NULL)
-//	char	*symName;		//!< Shared symbol name (unused for now)
+	char	*symName;		//!< Shared symbol name
+	char	*dstPath;		//!< Path to shared datastore (can be NULL)
 	u8		 gfxBpp;		//!< Bitdepth for shared graphics (unused for now)
 	CLDIB	*dib;			//!< External tileset DIB (can be NULL)
 	RECORD	 palRec;		//!< Shared palette (unused for now)

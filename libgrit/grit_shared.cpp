@@ -30,11 +30,12 @@ GritShared *grs_alloc()
 		return NULL;
 
 	memset(grs, 0, sizeof(GritShared));
+	memset(&grs->palRec, 0, sizeof(RECORD));
 
 	return grs;
 }
 
-//! GritShared constructor
+//! GritShared destructor
 void grs_free(GritShared *grs)
 {
 	if(grs == NULL)
@@ -77,6 +78,8 @@ void grs_run(GritShared *grs, GritRec *gr_base)
 
 	// Attach shared data
 	gr->shared= grs;
+	strrepl(&gr->symName, grs->symName);
+	strrepl(&gr->dstPath, grs->dstPath);
 
 	if(grs->dib == NULL)
 	{

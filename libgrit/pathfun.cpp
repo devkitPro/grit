@@ -608,7 +608,7 @@ long file_find_tag(FILE *fout, FILE *fin, const char *tag)
 			pos= ftell(fin);
 			fgets(buffy, LINE_MAX, fin);
 			strtrim(line, buffy);
-			if(strcmp(line, tag) == 0)
+			if(strncmp(line, tag, strlen(tag)) == 0)
 				return pos;	
 		}		
 	}
@@ -822,6 +822,100 @@ bool xp_data_gas(FILE *fp, const void *_data, int len, int chunk)
 	// ASSERT(fp);
 
 	return true;
+}
+
+//! Reads comma-separated numbers from a GNU Assembly file (written previously).
+bool im_data_gas(FILE* fp, const char* name, const void *_data, int *len, int *chunk)
+{
+    bool retval = false;
+    int done = 0;
+    char read[256];
+    char search[256];
+    int cols = 0;
+    int _len = 0;
+    int _chunk = 0;
+    unsigned char *data = (unsigned char*)_data;
+
+    while(!retval)
+    {
+        int r = fscanf(fp, " @{{BLOCK(%[^)])", read);
+        if(r == EOF) { return false; } // couldn't find the block
+        if(r > 0)
+        {
+            if(!strcmp(read, name)) retval = true; // found the block
+        }
+        else
+            fgets(read, 256, fp);
+    }
+
+    sprintf(search, "%s%s", name, "Pal");
+    retval = (file_find_tag(0, fp, search) >= 0);
+    while(retval && !done)
+    {
+        int i;
+        if(!fgets(read, 256, fp)) break;
+
+        // trim
+        char *tread = read;
+        while(isspace(*tread)) tread++;
+        for(i=strlen(tread)-1; isspace(tread[i]); tread[i--] = 0);
+
+        if(!*tread) continue; // skip blank
+        if(!_chunk) // need to find chunk size
+        {
+            search[0] = '.';
+            search[1] = 0;
+            if(sscanf(tread, ".%s 0x", search+1))
+            {
+                for(i=0; i<5; i<<=1) {
+                    if(!strcmp(search, cGasTypes[i]))
+                    {
+                        _chunk = i;
+                        switch(_chunk)
+                        {
+                            case 1: cols = 16; break;
+                            case 2: cols =  8; break;
+                            case 4: cols =  8; break;
+                        }
+                        *chunk = _chunk;
+                    }
+                }
+            }
+            if(!_chunk) return false;
+            sprintf(search, "%s 0x%%n", cGasTypes[_chunk]);
+        }
+        int c = 0;
+        sscanf(tread, search, &c);
+        if(c<strlen(search)-2) { done = 1; break; }
+        tread += c;
+
+        int _col = cols;
+        int _data;
+        while(_col && *tread && !done )
+        {
+            for(i=0; i<_chunk; i+=2)
+            {
+                sscanf(tread, "%04X", &_data);
+                tread+=4;
+                *(data++) = (_data >> 7)&0xF8;
+                *(data++) = (_data >> 2)&0xF8;
+                *(data++) = (_data << 3)&0xF8;
+            }
+            _col--;
+            _len++;
+            if(_col)
+            {
+                int r = 0;
+                sscanf(tread, ",0x%n", &r);
+                if(r == 3)
+                    tread += 3; // eat ",0x"
+                else
+                    done = 1;
+            }
+        }
+    }
+    *len = _len;
+    return retval;
 }
 
 //! Dumps data into a binary file

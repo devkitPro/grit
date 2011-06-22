@@ -656,6 +656,7 @@ bool grit_parse(GritRec *gr, const strvec &args)
 bool grit_parse_shared(GritRec *gr, const strvec &args)
 {
 	int val;
+	GritShared *grs = gr->shared;
 
 	// datatype: 8, 16, 32
 	if( (val= CLI_INT("-U", 0)) != 0)
@@ -691,18 +692,21 @@ bool grit_parse_shared(GritRec *gr, const strvec &args)
 
 	if(bDst && bSym)
 	{
-		strrepl(&gr->dstPath, pDst);
-		strrepl(&gr->symName, pSym);		
+		strrepl(&grs->dstPath, pDst);
+		strrepl(&grs->symName, pSym);		
 	}	
 	else if( bDst && !bSym)
 	{
-		strrepl(&gr->dstPath, pDst);
+		strrepl(&grs->dstPath, pDst);
+		strrepl(&grs->symName, gr->symName);
 	}
 	else if(!bDst &&  bSym)
 	{
-		strrepl(&gr->symName, pSym);
+		strrepl(&grs->symName, pSym);
 		if(isempty(gr->dstPath))
-		strrepl(&gr->dstPath, pSym);		
+		    strrepl(&grs->dstPath, pSym);		
+		else
+		    strrepl(&grs->dstPath, gr->dstPath);
 	}
 	else
 	{
@@ -711,10 +715,16 @@ bool grit_parse_shared(GritRec *gr, const strvec &args)
 		path_get_title(symName, gr->dstPath, MAXPATHLEN);
 		strcat(symName, "Shared");
 		lprintf(LOG_WARNING, "No -O or -S in shared run. Using \"%s\".\n", symName);
-		strrepl(&gr->symName, symName);
+		strrepl(&grs->symName, symName);
+		strrepl(&grs->dstPath, gr->dstPath);
 		gr->bAppend= true;
 	}
 
+        return true;
+}
+
+bool grit_prep_shared_output(GritRec*gr, const strvec &args)
+{
 	if(!gr->gfxIsShared)
 		gr->gfxProcMode &= ~GRIT_OUTPUT;
 		
@@ -728,13 +738,41 @@ bool grit_parse_shared(GritRec *gr, const strvec &args)
 	}
 		
 	return true;
-}
+};
 
 
 // --------------------------------------------------------------------
 // External files
 // --------------------------------------------------------------------
 
+bool grit_load_shared_pal(GritRec *gr)
+{
+    lprintf(LOG_STATUS, "Loading shared palette.\n");
+
+    GritShared *grs = gr->shared;
+    char path[1024];
+    path_repl_ext(path, grs->dstPath, c_fileTypes[gr->fileType], MAXPATHLEN);
+
+    if(file_exists(path))
+    {
+	FILE* fp = fopen(path, "r");
+
+	int len;
+	int chunk;
+	if(!grs->palRec.data)
+	{
+	    grs->palRec.data = (BYTE*)malloc(512 * sizeof(char));
+	    memset(grs->palRec.data, 0, 512);
+	}
+	im_data_gas(fp, grs->symName, grs->palRec.data, &len, &chunk);
+	grs->palRec.width = 4;
+	grs->palRec.height = len;
+    }
+    else
+	lprintf(LOG_WARNING, "\tShared palette (%s) does not yet exist.\n", path);
+
+    return true;
+}
 
 //! Load an external tile file.
 /*!
@@ -1015,6 +1053,12 @@ int run_shared(GritRec *gr, const strvec &args, const strvec &fpaths)
 	if(gr->gfxIsShared)
 		grit_load_ext_tiles(gr);
 
+	if(gr->palIsShared)
+	{
+	    grit_parse_shared(gr, args);
+	    grit_load_shared_pal(gr);
+	}
+
 	for(ii=0; ii<fpaths.size(); ii++)
 	{
 		lprintf(LOG_STATUS, "Input file %s\n", fpaths[ii]);
@@ -1054,6 +1098,7 @@ int run_shared(GritRec *gr, const strvec &args, const strvec &fpaths)
 	strrepl(&gr->srcPath, fpaths[0]);
 
 	grit_parse_shared(gr, args);
+	grit_prep_shared_output(gr, args);
 
 	grs_run(grs, gr);
 
