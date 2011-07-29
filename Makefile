@@ -17,15 +17,11 @@ ifneq (,$(findstring MINGW,$(UNAME)))
 	CFLAGS		+= -mno-cygwin
 	LDFLAGS		+= -mno-cygwin -s
 	OS	:=	win32
-	EXTRAINSTALL	:=	extlib/FreeImage.dll
-endif
-
 ifneq (,$(findstring CYGWIN,$(UNAME)))
 	CFLAGS		+= -mno-cygwin
 	LDFLAGS		+= -mno-cygwin -s
 	EXEEXT		:= .exe
 	OS	:=	win32
-	EXTRAINSTALL	:=	extlib/FreeImage.dll
 endif
 
 ifneq (,$(findstring Darwin,$(UNAME)))
@@ -134,13 +130,13 @@ clean	:
 	rm -fr $(TARGET) build $(LIBGRIT) $(LIBCLDIB) *.bz2
 
 install:
-	cp  $(TARGET) $(EXTRAINSTALL) $(PREFIX)
+	cp  $(TARGET) $(PREFIX)
 
 dist-src:
 	@tar --exclude=*CVS* -cvjf grit-src-$(GRIT_VERSION).tar.bz2 $(SRCDIRS) *.txt Makefile 
 
 dist-bin: all
-	@tar -cjvf grit-$(VERSION)-$(OS).tar.bz2 $(TARGET) $(EXTRATAR)
+	@tar -cjvf grit-$(VERSION)-$(OS).tar.bz2 $(TARGET)
 
 dist: dist-src dist-bin
 
