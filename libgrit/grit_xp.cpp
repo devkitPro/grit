@@ -1139,9 +1139,19 @@ bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 	mw= gr->metaWidth;
 	mh= gr->metaHeight;
 
+	//build a bpp or texformat description
+	char bppDescr[16];
+	sprintf(bppDescr,"%d",gr->gfxBpp);
+	switch(gr->gfxTexMode)
+	{
+	case GRIT_TEXFMT_NONE: break;
+	case GRIT_TEXFMT_A5I3: strcpy(bppDescr,"a5i3"); break;
+	case GRIT_TEXFMT_A3I5: strcpy(bppDescr,"a3i5"); break;
+	case GRIT_TEXFMT_4x4: strcpy(bppDescr,"4x4"); break;
+	}
+
 	fprintf(fp, "%s%s\n", hline, cmt);
-	fprintf(fp, "%s\t%s, %dx%d@%d, \n", cmt, gr->symName, 
-		aw, ah, gr->gfxBpp);
+	fprintf(fp, "%s\t%s, %dx%d@%s, \n", cmt, gr->symName, aw, ah, bppDescr);
 
 	// Transparency options
 	if(gr->gfxHasAlpha)

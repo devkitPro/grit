@@ -83,6 +83,14 @@ enum EGritGraphicsMode
 	GRIT_GFX_BMP_A	= 2,	//!< Full alpha-bit ` -gb -gT!' 
 };
 
+enum EGritGraphicsTextureFormat
+{
+	GRIT_TEXFMT_NONE = 0,
+	GRIT_TEXFMT_A5I3 = 1,
+	GRIT_TEXFMT_A3I5 = 2,
+	GRIT_TEXFMT_4x4 = 3,
+};
+
 //! Tilemap reduction modes.
 /*!	These modes can be combined: 
 	-mRtfp (or -mRfp, -mRftp, etc) means tiles, flip & pal reduction
@@ -258,7 +266,9 @@ struct GritRec
 	echar	 gfxDataType;	//!< Graphics data type (-gu{num} ).
 	echar	 gfxCompression;	//!< Graphics compression type
 	echar	 gfxMode;		//!< Graphics mode (tile, bmp, bmpA).
+	bool	 texModeEnabled; //!< texture operations enabled
 	u8		 gfxBpp;		//!< Output bitdepth (-gB{num} ).
+	u8		 gfxTexMode; //!< Output texmode, if it is a special texture mode
 	bool	 gfxHasAlpha;	//!< Input image has transparent color.
 	RGBQUAD	 gfxAlphaColor;	//!< Transparent color (-gT {num} ). 
 	u32		 gfxOffset;		//!< Pixel value offset (-ga {num}).
@@ -288,6 +298,7 @@ struct GritRec
 	u32		 palAlphaId;	//!< Transparent palette entry
 	int		 palStart;		//!< First palette entry to export.
 	int		 palEnd;		//!< Final palette entry to export (exclusive)
+	bool	 palEndSet;		//!< Whether the user set the palette end
 	bool	 palIsShared;	//!< Shared palette (-pS),
 
 // Shared information
@@ -295,6 +306,7 @@ struct GritRec
 
 // Private: keep the f#^$k off
 	CLDIB	*_dib;		//!< Internal work bitmap
+	CLDIB *_origDib; //!< unmodified bitmap, for preserving alpha channel
 	RECORD	 _gfxRec;	//!< Output graphics data
 	RECORD	 _mapRec;	//!< Output tilemap data
 	RECORD	 _metaRec;	//!< Output metatile data

@@ -89,10 +89,18 @@ bool grit_prep(GritRec *gr)
 */
 
 	if(gr->gfxProcMode != GRIT_EXCLUDE)
-		grit_prep_gfx(gr);
+	{
+		if(!grit_prep_gfx(gr))
+			return false;
+	}
 	
 	if(gr->palProcMode != GRIT_EXCLUDE)
-		grit_prep_pal(gr);
+	{
+		if(!grit_prep_pal(gr))
+			return false;
+	}
+
+	dib_free(gr->_origDib);
 
 	lprintf(LOG_STATUS, "Data preparation complete.\n");		
 	return true;
@@ -111,6 +119,8 @@ bool grit_prep_work_dib(GritRec *gr)
 	RGBQUAD *rgb;
 
 	lprintf(LOG_STATUS, "Work-DIB creation.\n");		
+
+	gr->_origDib = dib_clone(gr->srcDib);
 
 	// --- resize ---
 	CLDIB *dib= dib_copy(gr->srcDib, 
@@ -524,9 +534,34 @@ bool grit_prep_gfx(GritRec *gr)
 	int srcS= dib_get_size_img(gr->_dib);
 	BYTE *srcD= dib_get_img(gr->_dib);
 
+	//make sure that the dib is power of 2 for texture operations
+	if(gr->texModeEnabled)
+	{
+		int width = dib_get_width(gr->_dib);
+		int height = dib_get_height(gr->_dib);
+		int width_test = (width&(width-1));
+		int height_test = (width&(width-1));
+		if(width_test && height_test)
+		{
+			lprintf(LOG_ERROR, "  graphics for texture is not a power of 2.\n");
+			return false;
+		}
+
+		if(width<8 || width>1024 || height<8 || height>1024)
+		{
+			lprintf(LOG_ERROR, "  one of texture dimensions violates 8 <= n <= 1024\n");
+			return false;
+		}
+	}
+
 	int dstB= gr->gfxBpp;
+
+	int dstB_align = dstB;
+	if(dstB == 3) dstB_align = 8;
+	if(dstB == 5) dstB_align = 8;
+
 	// # dst bytes, with # src pixels as 'width'
-	int dstS= dib_align(srcS*8/srcB, dstB);
+	int dstS= dib_align(srcS*8/srcB, dstB_align);
 	dstS= ALIGN4(dstS);
 	BYTE *dstD= (BYTE*)malloc(dstS);
 	if(dstD == NULL)
@@ -548,6 +583,27 @@ bool grit_prep_gfx(GritRec *gr)
 	}
 	else
 		memcpy(dstD, srcD, dstS);
+
+	//add alpha data for texture formats
+	if((gr->gfxTexMode == GRIT_TEXFMT_A5I3 || gr->gfxTexMode == GRIT_TEXFMT_A3I5))
+	{
+		bool has_src_alpha = (dib_get_bpp(gr->_origDib) == 32);
+		const int alpha_bits = (gr->gfxTexMode == GRIT_TEXFMT_A5I3)?5:3;
+		const int shift_bits = 8-alpha_bits;
+		BYTE* src_img = dib_get_img(gr->_origDib);
+		BYTE* dst_img = dstD;
+		int todo = srcS;
+		while(todo--)
+		{
+			RGBQUAD pixel = *(RGBQUAD*)src_img;
+			int alpha = 255;
+			if(has_src_alpha)
+				alpha = (pixel.rgbReserved)>>shift_bits;
+			*dst_img |= alpha<<shift_bits;
+			src_img+=4;
+			dst_img++;
+		}
+	}
 
 	RECORD rec= { 1, dstS, dstD };
 

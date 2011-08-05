@@ -36,6 +36,10 @@
 #include <strings.h>
 #endif	// _MSC_VER
 
+#ifdef _MSC_VER
+#include "grit_version.h"
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,11 +64,11 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre);
 // --------------------------------------------------------------------
 
 #ifndef GRIT_VERSION
-#define GRIT_VERSION	"0.8.4"
+#error GRIT_VERSION must be defined such as "0.8.4"
 #endif
 
 #ifndef GRIT_BUILD
-#define GRIT_BUILD		"20100204"
+#error GRIT_BUILD must be defined such as "20100204"
 #endif
 
 // --- Application constants ---
@@ -85,7 +89,8 @@ const char appHelpText[]=
 //"-ga{n}         Gfx pixel offset (non-zero pixels) [0]\n"
 //"-gA{n}         Gfx pixel offset n (all pixels) [0]\n"
 "-gb | -gt      Gfx format, bitmap or tile [tile]\n"
-"-gB{n}         Gfx bit depth (1, 2, 4, 8, 16) [img bpp]\n"
+"-gB{fmt}       Gfx format / bit depth (1, 2, 4, 8, 16, a5i3, a3i5) [img bpp]\n"
+"-gx            Enable texture operations\n"
 "-gS            Shared graphics\n"
 "-gT{n}         Transparent color; rrggbb hex or 16bit BGR hex [FF00FF]\n"
 "-al{n}         Area left [0]\n"
@@ -292,7 +297,10 @@ bool grit_parse_pal(GritRec *gr, const strvec &args)
 		gr->palStart= CLI_INT("-ps", 0);
 
 		if( (val= CLI_INT("-pn", -1)) >= 0)
+		{
 			gr->palEnd= gr->palStart + val;
+			gr->palEndSet = true;
+		}
 		else if( (val= CLI_INT("-pe", -1)) >= 0)
 			gr->palEnd= val;
 	}
@@ -346,10 +354,23 @@ bool grit_parse_gfx(GritRec *gr, const strvec &args)
 			lprintf(LOG_WARNING, "No main mode specified (-gt/-gb).\n");
 		gr->gfxMode= GRIT_GFX_TILE;
 	}
+	
+	if(CLI_BOOL("-gx"))
+		gr->texModeEnabled = true;
 
 	// Bitdepth override
-	if( (val= CLI_INT("-gB", 0)) != 0)
-		gr->gfxBpp= val;
+	char* bppOverride = CLI_STR("-gB",0);
+	if(bppOverride)
+	{
+		if(!strcasecmp(bppOverride,"a3i5"))
+			gr->gfxTexMode = GRIT_TEXFMT_A3I5;
+		else if(!strcasecmp(bppOverride,"a5i3"))
+			gr->gfxTexMode = GRIT_TEXFMT_A5I3;
+		else if(!strcasecmp(bppOverride,"4x4"))
+			gr->gfxTexMode = GRIT_TEXFMT_4x4;
+		else if( (val= CLI_INT("-gB", 0)) != 0)
+			gr->gfxBpp = val;
+	}
 
 	// Transparency
 	if( CLI_BOOL("-gT") )
