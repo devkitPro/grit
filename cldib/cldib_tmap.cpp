@@ -401,7 +401,6 @@ void tmap_pack(const Tilemap *tm, RECORD *dstRec, const MapselFormat *mf)
 
 	const Mapsel *srcL= tm->data;
 
-	printf("tmap_pack to %d bit\n", mf->bitDepth);
 	//# TODO: safety checks?
 
 	if (mf->bitDepth == 8 ) {
