@@ -396,44 +396,48 @@ void tmap_pack(const Tilemap *tm, RECORD *dstRec, const MapselFormat *mf)
 	int ix, iy;
 	int mapW= tm->width, mapH= tm->height;
 
-	RECORD rec= { 4, mapW*mapH, NULL };
+	RECORD rec= { mf->bitDepth/8, mapW*mapH, NULL };
 	rec.data= (BYTE*)malloc(rec_size(&rec));
 
 	const Mapsel *srcL= tm->data;
-	u32 *dstL= (u32*)rec.data;
 
+	printf("tmap_pack to %d bit\n", mf->bitDepth);
 	//# TODO: safety checks?
 
-	// --- Convert map format ---
-	for(iy=0; iy<mapH; iy++)
-	{
-		for(ix=0; ix<mapW; ix++)
+	if (mf->bitDepth == 8 ) {
+		u8 *dstL= (u8*)rec.data;
+		// --- Convert map format ---
+		for(iy=0; iy<mapH; iy++)
 		{
-			u32 res= 0;
-			if(mf->idLen)
-				bfSet(res, srcL->index(), mf->idShift, mf->idLen);
-			if(mf->hfLen)
-				bfSet(res, srcL->hflip(), mf->hfShift, mf->hfLen);
-			if(mf->vfLen)
-				bfSet(res, srcL->vflip(), mf->vfShift, mf->vfLen);
-			if(mf->pbLen)
-				bfSet(res, srcL->pbank(), mf->pbShift, mf->pbLen);
-
-			*dstL++ = res + mf->base;
-			*srcL++;
+			for(ix=0; ix<mapW; ix++)
+			{
+				*dstL++ = srcL->index() & 0xff;
+				*srcL++;
+			}
 		}
-	}
+		
+	} else {
+		
+		u16 *dstL= (u16*)rec.data;
+		// --- Convert map format ---
+		for(iy=0; iy<mapH; iy++)
+		{
+			for(ix=0; ix<mapW; ix++)
+			{
+				u32 res= 0;
+				if(mf->idLen)
+					bfSet(res, srcL->index(), mf->idShift, mf->idLen);
+				if(mf->hfLen)
+					bfSet(res, srcL->hflip(), mf->hfShift, mf->hfLen);
+				if(mf->vfLen)
+					bfSet(res, srcL->vflip(), mf->vfShift, mf->vfLen);
+				if(mf->pbLen)
+					bfSet(res, srcL->pbank(), mf->pbShift, mf->pbLen);
 
-	//# TODO: endianness
-
-	// --- pack to proper mapsel bit-size ---
-	//# PONDER: integrate packing into main conversion?
-	if(mf->bitDepth < 32)
-	{
-		uint size= dib_align(mapW*mapH, mf->bitDepth);
-		u8 *data= (u8*)malloc(size);
-		data_bit_pack(data, rec.data, rec_size(&rec), 32, mf->bitDepth, 0); 
-		rec_attach(&rec, data, 1, size);
+				*dstL++ = res + mf->base;
+				*srcL++;
+			}
+		}
 	}
 
 	rec_alias(dstRec, &rec);
