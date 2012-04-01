@@ -18,9 +18,15 @@ AC_PROG_LIBTOOL
 #
 # check for libfreeimage
 #
+case "${host}" in
+	*-mingw32*)
+		WIN_FREEIMAGE_LIBS=-lws2_32
+	;;
+esac
+
 AC_CHECK_HEADER([FreeImage.h],
     [AC_CHECK_LIB([freeimage], [FreeImage_OpenMemory],
-        [FREEIMAGE_LIBS="-lfreeimage"], [FREEIMAGE_LIBS=], [-lstdc++])],
+        [FREEIMAGE_LIBS="-lfreeimage ${WIN_FREEIMAGE_LIBS} -lstdc++"], [FREEIMAGE_LIBS=], [${WIN_FREEIMAGE_LIBS -lstdc++])],
     [FREEIMAGE_LIBS=])
 AS_IF([test -z "$FREEIMAGE_LIBS"],
     [AC_MSG_ERROR(['libfreeimage' not found])])
