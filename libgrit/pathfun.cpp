@@ -691,7 +691,7 @@ bool xp_array_c(FILE *fp, const char *symname,
 		return false;
 
 	// NOTE: no EOL break
-	fprintf(fp, "const unsigned %s %s[%d] __attribute__((aligned(4)))=\n{", 
+	fprintf(fp, "const unsigned %s %s[%d] __attribute__((aligned(4))) __attribute__((visibility(\"hidden\")))=\n{", 
 		cCTypes[chunk], symname, ALIGN4(len)/chunk);
 	
 	xp_data_c(fp, data, len, chunk);
@@ -767,8 +767,10 @@ bool xp_array_gas(FILE *fp, const char *symname,
 
 	fputs("\t.section .rodata\n\t.align\t2\n", fp);
 	// NOTE: no EOL break
-	fprintf(fp, "\t.global %s\t\t@ %d unsigned chars\n%s:", 
-		symname, ALIGN4(len), symname);
+	fprintf(fp, "\t.global %s\t\t@ %d unsigned chars\n", 
+		symname, ALIGN4(len));
+	fprintf(fp, "\t.hidden %s\n%s:", 
+		symname,symname);
 	
 	xp_data_gas(fp, data, len, chunk);
 
