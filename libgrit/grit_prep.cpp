@@ -670,16 +670,16 @@ bool grit_prep_shared_pal(GritRec *gr)
 	if(gr->shared->palRec.height < nclrs && nclrs != 0)
 		nclrs= gr->shared->palRec.height;
 
-    totalClrs = 256;
+	totalClrs = 256*sizeof(COLOR);
 
-	palS= totalClrs*sizeof(COLOR);
-	palOut= (COLOR*)malloc(palS);
+	palS= nclrs*sizeof(COLOR);
+	palOut= (COLOR*)malloc(totalClrs);
 	palIn= (RGBQUAD*)(&gr->shared->palRec.data[gr->palStart]);
 
 	for(ii=0; ii<nclrs; ii++)
 		palOut[ii]= RGB16(palIn[ii].rgbBlue, palIn[ii].rgbGreen, palIn[ii].rgbRed);
 
-    for(ii = nclrs; ii < totalClrs; ii++)
+    for(ii = nclrs; ii < 256; ii++)
         palOut[ii] = 0;
 
 	RECORD rec= { 2, palS/2, (BYTE*)palOut };
