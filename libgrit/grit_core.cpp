@@ -383,7 +383,7 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre)
 		pre= "";
 
 	fputs(pre, fp);
-	fprintf(fp, "%s >%s %s.%s %s\n", 
+	fprintf(fp, "%s >%s %s.%s\n",
 		gr->srcPath, (gr->bAppend ? ">":""), 
 		gr->dstPath, (gr->bHeader ? "+.h":"") );
 
