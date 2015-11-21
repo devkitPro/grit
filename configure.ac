@@ -6,7 +6,7 @@ AC_PREREQ(2.61)
 AC_INIT([grit],[0.8.12],[davem@devkitpro.org])
 AC_CONFIG_SRCDIR([srcgrit/cli.cpp])
 
-AM_INIT_AUTOMAKE([1.10])
+AM_INIT_AUTOMAKE([subdir-objects])
 
 
 # Checks for programs.
