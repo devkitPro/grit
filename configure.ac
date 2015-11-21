@@ -3,7 +3,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT([grit],[0.8.12],[davem@devkitpro.org])
+AC_INIT([grit],[0.8.13],[davem@devkitpro.org])
 AC_CONFIG_SRCDIR([srcgrit/cli.cpp])
 
 AM_INIT_AUTOMAKE([subdir-objects])
