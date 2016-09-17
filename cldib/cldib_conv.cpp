@@ -179,7 +179,7 @@ CLDIB *dib_bit_unpack_copy(CLDIB *src, int dstB, DWORD base)
 	CLDIB *dst= dib_alloc(srcW, srcH, dstB, NULL, dib_is_topdown(src));
 
 	if(dst==NULL)
-		return false;
+		return NULL;
 
 	BYTE *srcD= dib_get_img(src), *dstD= dib_get_img(dst);
 
@@ -256,7 +256,7 @@ CLDIB *dib_8_to_true_copy(CLDIB *src, int dstB)
 	CLDIB *dst= dib_alloc(srcW, srcH, dstB, NULL, dib_is_topdown(src));
 
 	if(dst==NULL)
-		return false;
+		return NULL;
 
 	BYTE *srcD= dib_get_img(src), *dstD= dib_get_img(dst);
 
@@ -301,7 +301,7 @@ CLDIB *dib_true_to_true_copy(CLDIB *src, int dstB)
 	CLDIB *dst= dib_alloc(srcW, srcH, dstB, NULL, dib_is_topdown(src));
 
 	if(dst==NULL)
-		return false;
+		return NULL;
 
 	BYTE *srcD= dib_get_img(src), *dstD= dib_get_img(dst);
 
