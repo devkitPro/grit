@@ -326,7 +326,7 @@ bool grit_xp_c(GritRec *gr)
 	{
 		// Open temp and input file
 		tmpnam(tmppath);
-		if( (fout=fopen(tmppath, "w")) == NULL)
+		if( (fout=fopen(tmppath, "w+")) == NULL)
 			return false;
 
 		fin= fopen(fpath, "r");
@@ -379,10 +379,22 @@ bool grit_xp_c(GritRec *gr)
 		file_copy(fout, fin, -1);
 
 		// close files and rename
-		fclose(fout);
 		fclose(fin);
-		remove(fpath);
-		rename(tmppath, fpath);
+		if (rename(tmppath, fpath) < 0)
+		{
+			// in case rename fails, copy over the source file instead
+			fin= fopen(fpath, "w");
+			fseek(fout, 0, SEEK_SET);
+			file_copy(fin, fout, -1);
+			fclose(fin);
+			fclose(fout);
+			remove(tmppath);
+		}
+		else
+		{
+			fclose(fout);
+			remove(fpath);
+		}
 	}
 	else
 	{
@@ -425,7 +437,7 @@ bool grit_xp_gas(GritRec *gr)
 	{
 		// Open temp and input file
 		tmpnam(tmppath);
-		if( (fout=fopen(tmppath, "w")) == NULL)
+		if( (fout=fopen(tmppath, "w+")) == NULL)
 			return false;
 
 		fin= fopen(fpath, "r");
@@ -479,10 +491,22 @@ bool grit_xp_gas(GritRec *gr)
 		file_copy(fout, fin, -1);
 
 		// close files and rename
-		fclose(fout);
 		fclose(fin);
-		remove(fpath);
-		rename(tmppath, fpath);
+		if (rename(tmppath, fpath) < 0)
+		{
+			// in case rename fails, copy over the source file instead
+			fin= fopen(fpath, "w");
+			fseek(fout, 0, SEEK_SET);
+			file_copy(fin, fout, -1);
+			fclose(fin);
+			fclose(fout);
+			remove(tmppath);
+		}
+		else
+		{
+			fclose(fout);
+			remove(fpath);
+		}
 	}
 	else
 	{
@@ -1038,7 +1062,7 @@ bool grit_xp_h(GritRec *gr)
 	{
 		// Open temp and input file
 		tmpnam(tmppath);
-		if( (fout=fopen(tmppath, "w")) == NULL)
+		if( (fout=fopen(tmppath, "w+")) == NULL)
 			return false;
 
 		fin= fopen(fpath, "r");
@@ -1096,10 +1120,22 @@ bool grit_xp_h(GritRec *gr)
 		file_copy(fout, fin, -1);
 
 		// close files and rename
-		fclose(fout);
 		fclose(fin);
-		remove(fpath);
-		rename(tmppath, fpath);
+		if (rename(tmppath, fpath) < 0)
+		{
+			// in case rename fails, copy over the source file instead
+			fin= fopen(fpath, "w");
+			fseek(fout, 0, SEEK_SET);
+			file_copy(fin, fout, -1);
+			fclose(fin);
+			fclose(fout);
+			remove(tmppath);
+		}
+		else
+		{
+			fclose(fout);
+			remove(fpath);
+		}
 	}
 	else
 	{
