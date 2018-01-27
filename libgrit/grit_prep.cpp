@@ -605,6 +605,20 @@ bool grit_prep_gfx(GritRec *gr)
 		}
 	}
 
+    if (gr->gfxOffset > 0)
+    {
+        BYTE* dst_img = dstD;
+        int todo = dstS;
+        while (todo--)
+        {
+            if (*dst_img != 0)
+            {
+                *dst_img += gr->gfxOffset;
+            }
+            dst_img++;
+        }
+    }
+
 	RECORD rec= { 1, dstS, dstD };
 
 	if( BYTE_ORDER == BIG_ENDIAN && gr->gfxBpp > 8 )
