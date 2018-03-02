@@ -3,7 +3,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT([grit],[0.8.14],[https://github.com/devkitPro/grit/issues])
+AC_INIT([grit],[0.8.15],[https://github.com/devkitPro/grit/issues])
 AC_CONFIG_SRCDIR([srcgrit/cli.cpp])
 AC_CONFIG_MACRO_DIR([m4])
 
@@ -38,7 +38,7 @@ AC_LINK_IFELSE(
 AC_MSG_RESULT([$freeimage_result])
 LIBS="$save_LIBS"
 if test "x$freeimage_result" = "xyes"; then
-	FREEIMAGE_LIBS="-lfreeimage ${WIN_FREEIMAGE_LIBS} -lstdc++ -lm"
+	FREEIMAGE_LIBS="-lfreeimage ${WIN_FREEIMAGE_LIBS} -static-libstdc++ -lm"
 else
 	 AC_MSG_ERROR(['libfreeimage' not found])
 fi
