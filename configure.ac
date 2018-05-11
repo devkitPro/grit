@@ -38,7 +38,7 @@ AC_LINK_IFELSE(
 AC_MSG_RESULT([$freeimage_result])
 LIBS="$save_LIBS"
 if test "x$freeimage_result" = "xyes"; then
-	FREEIMAGE_LIBS="-lfreeimage ${WIN_FREEIMAGE_LIBS} -static-libstdc++ -lm"
+	FREEIMAGE_LIBS="-lfreeimage ${WIN_FREEIMAGE_LIBS} -lm"
 else
 	 AC_MSG_ERROR(['libfreeimage' not found])
 fi
