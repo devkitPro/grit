@@ -35,6 +35,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 
 #include <cldib_core.h>
 #include "grit.h"
@@ -172,6 +173,27 @@ uint grit_xp_total_size(GritRec *gr);
 // --------------------------------------------------------------------
 // FUNCTIONS
 // --------------------------------------------------------------------
+
+
+//! Generate a random filename based on base_name and stores it in pathbuf,
+//! then opens the file for writing.
+static FILE* open_tmp_file(char* pathbuf, size_t pathbuf_sz,
+	const char* base_name)
+{
+	snprintf(pathbuf, pathbuf_sz, "%s.tmp.XXXXXX", base_name);
+	int fd = mkstemp(pathbuf);
+	if (fd == -1) {
+		return NULL;
+	}
+
+	FILE* f = fdopen(fd, "w+");
+	if (f == NULL) {
+		close(fd);
+		return NULL;
+	}
+
+	return f;
+}
 
 
 //! Hub for export to file.
@@ -325,8 +347,7 @@ bool grit_xp_c(GritRec *gr)
 	if(bAppend)
 	{
 		// Open temp and input file
-		tmpnam(tmppath);
-		if( (fout=fopen(tmppath, "w+")) == NULL)
+		if((fout = open_tmp_file(tmppath, sizeof(tmppath), fpath)) == NULL)
 			return false;
 
 		fin= fopen(fpath, "r");
@@ -436,8 +457,7 @@ bool grit_xp_gas(GritRec *gr)
 	if(bAppend)
 	{
 		// Open temp and input file
-		tmpnam(tmppath);
-		if( (fout=fopen(tmppath, "w+")) == NULL)
+		if((fout = open_tmp_file(tmppath, sizeof(tmppath), fpath)) == NULL)
 			return false;
 
 		fin= fopen(fpath, "r");
@@ -1061,8 +1081,7 @@ bool grit_xp_h(GritRec *gr)
 	if(bAppend)
 	{
 		// Open temp and input file
-		tmpnam(tmppath);
-		if( (fout=fopen(tmppath, "w+")) == NULL)
+		if((fout = open_tmp_file(tmppath, sizeof(tmppath), fpath)) == NULL)
 			return false;
 
 		fin= fopen(fpath, "r");
