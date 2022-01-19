@@ -15,7 +15,7 @@ libgrit_la_SOURCES	= libgrit/cprs.cpp libgrit/cprs_huff.cpp libgrit/cprs_lz.cpp 
 			libgrit/grit_prep.cpp libgrit/grit_shared.cpp libgrit/grit_xp.cpp \
 			libgrit/logger.cpp libgrit/pathfun.cpp \
 			libgrit/cprs.h libgrit/grit.h libgrit/grit_core.h \
-			libgrit/logger.h libgrit/pathfun.h
+			libgrit/logger.h libgrit/pathfun.h libgrit/cue_huffman.c libgrit/cue_huffman.h
 
 libgrit_la_CPPFLAGS	=	-I$(top_srcdir)/cldib
 
