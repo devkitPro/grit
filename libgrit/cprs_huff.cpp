@@ -1,276 +1,460 @@
-//
-//! \file grit_huff.cpp
-//!   Huffman compression implementation, taken from Numerical Recipies.
-//! \date 20050906 - 20080208
-//! \author cearn
-//
-// === NOTES === 
-// * Most tables use BASE 1 INDEXING. because 0 has a special meaning
-//   YHBW.
-// * 8bpp huffman still fails at times ... but why? array overflow?
+/*
+===============================================================================
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+ Copyright (C) 2022 gba-hpp contributors
+ Copyright (C) 2022 Gustavo Valiente (gustavo.valiente@protonmail.com)
+ zlib kicense.
+ For conditions of distribution and use, see license-zlib.txt file.
+
+===============================================================================
+*/
+
+#ifndef GBA_HUFF_H
+#define GBA_HUFF_H
+
+#include <array>
+#include <vector>
+#include <algorithm>
+
+namespace gba_huff
+{
+
+struct bios_uncomp_header
+{
+    enum class type : std::uint32_t
+    {
+        lz77 = 0x10,
+        huffman_4 = 0x24,
+        huffman_8 = 0x28,
+        rle = 0x30,
+        filter_8 = 0x81,
+        filter_16 = 0x82,
+    };
+
+    type type : 8;
+    std::uint32_t length : 24;
+};
+
+struct result_type
+{
+    bios_uncomp_header header;
+    std::vector<std::uint8_t> data;
+};
+
+namespace detail
+{
+
+template<typename T, std::size_t N, class Compare>
+class priority_queue
+{
+
+public:
+    void push(const T& value)
+    {
+        m_buffer[m_size++] = value;
+
+        std::sort(m_buffer.begin(), std::next(m_buffer.begin(), m_size), Compare());
+    }
+
+    const T& top() const
+    {
+        return m_buffer[0];
+    }
+
+    std::size_t size() const
+    {
+        return m_size;
+    }
+
+    void pop()
+    {
+        if(! m_size)
+        {
+            return;
+        }
+
+        for(std::size_t ii = 1, il = m_size; ii < il; ++ii)
+        {
+            m_buffer[ii - 1] = m_buffer[ii];
+        }
+
+        --m_size;
+    }
+
+private:
+    std::array<T, N> m_buffer{};
+    std::size_t m_size{};
+};
+
+struct node_type
+{
+    std::uint8_t data{};
+    std::size_t weight{};
+    node_type* node0{};
+    node_type* node1{};
+
+    bool is_leaf() const
+    {
+        return node0 == nullptr && node1 == nullptr;
+    }
+
+    bool is_branch() const
+    {
+        return node0 != nullptr && node1 != nullptr;
+    }
+};
+
+template<std::size_t N>
+class node_allocator
+{
+
+public:
+    node_type* alloc(std::uint8_t data, std::size_t weight)
+    {
+        node_type& node = m_buffer[m_size++];
+        node.data = data;
+        node.weight = weight;
+        node.node0 = node.node1 = nullptr;
+        return &node;
+    }
+
+    node_type* alloc(std::size_t weight, node_type* node0, node_type* node1)
+    {
+        node_type& node = m_buffer[m_size++];
+        node.data = {};
+        node.weight = weight;
+        node.node0 = node0;
+        node.node1 = node1;
+        return &node;
+    }
+
+private:
+    std::array<node_type, N> m_buffer{};
+    std::size_t m_size{};
+};
+
+struct node_compare
+{
+    bool operator()(const node_type* node0, const node_type* node1) const
+    {
+        return node0->weight < node1->weight;
+    }
+};
+
+struct bit_code
+{
+    bit_code operator+(int i) const
+    {
+        bit_code copy = {value, length};
+
+        if(i)
+        {
+            copy.value |= (1ull << length);
+        }
+
+        ++copy.length;
+        return copy;
+    }
+
+    std::uint64_t value{};
+    std::size_t length{};
+};
+
+void encode(const node_type* node, bit_code code, std::array<bit_code, 0x100>& bit_codes)
+{
+    if(node->is_branch())
+    {
+        encode(node->node0, code + 0, bit_codes);
+        encode(node->node1, code + 1, bit_codes);
+    }
+    else
+    {
+        bit_codes[static_cast<int>(node->data)] = code;
+    }
+}
+
+template<std::size_t N>
+class flat_node_tree
+{
+
+public:
+    explicit flat_node_tree(const node_type* node)
+    {
+        m_buffer[m_size++] = node;
+        flatten(node);
+    }
+
+    const node_type* operator[](std::size_t idx) const
+    {
+        return m_buffer[idx];
+    }
+
+    std::size_t size() const
+    {
+        return m_size;
+    }
+
+    std::size_t index_of(const node_type* node) const
+    {
+        for(std::size_t ii = 0, il = m_size; ii < il; ++ii)
+        {
+            if(m_buffer[ii] == node)
+            {
+                return ii;
+            }
+        }
+
+        return std::size_t(-1);
+    }
+
+    std::size_t index_of(const node_type& node) const
+    {
+        return index_of(&node);
+    }
+
+private:
+    void flatten(const node_type* node)
+    {
+        if(node->is_branch())
+        {
+            m_buffer[m_size++] = node->node0;
+            m_buffer[m_size++] = node->node1;
+
+            flatten(node->node0);
+            flatten(node->node1);
+        }
+    }
+
+    std::array<const node_type*, N> m_buffer{};
+    std::size_t m_size{};
+};
+
+template<std::size_t BitLength>
+std::vector<std::uint8_t> compress(const std::uint8_t* data, std::size_t size)
+{
+    std::array<std::size_t, 0x100> frequencies{};
+
+    for(std::size_t ii = 0; ii < size; ++ii)
+    {
+        int byte = static_cast<int>(data[ii]);
+
+        if(BitLength == 4)
+        {
+            ++frequencies[byte & 0xf];
+            ++frequencies[(byte >> 4) & 0xf];
+        }
+        else
+        {
+            ++frequencies[byte];
+        }
+    }
+
+    node_allocator<0x400> node_allocator{};
+
+    priority_queue<node_type*, 0x400, node_compare> pq;
+
+    for(std::size_t ii = 0, il = frequencies.size(); ii < il; ++ii)
+    {
+        if(frequencies[ii])
+        {
+            pq.push(node_allocator.alloc(std::uint8_t(ii), frequencies[ii]));
+        }
+    }
+
+    if(pq.size() <= 1)
+    {
+        // Constant value, make root point to it twice
+        node_type* node01 = pq.top();
+        pq.pop();
+        pq.push(node_allocator.alloc(node01->weight + node01->weight, node01, node01));
+    }
+    else
+    {
+        while(pq.size() > 1)
+        {
+            node_type* node0 = pq.top();
+            pq.pop();
+            node_type* node1 = pq.top();
+            pq.pop();
+
+            pq.push(node_allocator.alloc(node0->weight + node1->weight, node0, node1));
+        }
+    }
+
+    node_type* root = pq.top();
+
+    std::array<bit_code, 0x100> bit_codes{};
+    encode(root, bit_code(), bit_codes);
+
+    std::array<std::uint8_t, 0x400> tree_table{};
+    std::size_t tree_table_len = 0;
+
+    flat_node_tree<0x400> nodes(root);
+
+    for(std::size_t ii = 0, il = nodes.size(); ii < il; ++ii)
+    {
+        const node_type& n = *nodes[ii];
+
+        if(n.is_branch())
+        {
+            std::size_t offset = (nodes.index_of(n.node0) - nodes.index_of(n)) - 1;
+            std::size_t jump = offset / 2;
+
+            if(n.node0->is_leaf())
+            {
+                jump |= 0x80;
+            }
+
+            if(n.node1->is_leaf())
+            {
+                jump |= 0x40;
+            }
+
+            tree_table[tree_table_len++] = std::uint8_t(jump);
+        }
+        else
+        {
+            tree_table[tree_table_len++] = n.data;
+        }
+    }
+
+    std::size_t max_result_length = tree_table_len + (size * 2 * 4) + 4;
+    std::vector<std::uint8_t> result(max_result_length);
+    std::size_t result_length = 0;
+
+    // Remember where we will write table size
+    std::size_t data_offset_cur = result_length++;
+
+    // Write tree_table
+    for(std::size_t ii = 0; ii < tree_table_len; ++ii)
+    {
+        result[result_length++] = tree_table[ii];
+    }
+
+    std::vector<bit_code> bit_array;
+    std::size_t bit_array_len = 0;
+
+    if(BitLength == 4)
+    {
+        bit_array.resize(size * 2);
+    }
+    else
+    {
+        bit_array.resize(size);
+    }
+
+    for(std::size_t ii = 0; ii < size; ++ii)
+    {
+        int byte = static_cast<int>(data[ii]);
+
+        if(BitLength == 4)
+        {
+            bit_array[bit_array_len++] = bit_codes[byte & 0xf];
+            bit_array[bit_array_len++] = bit_codes[(byte >> 4) & 0xf];
+        }
+        else
+        {
+            bit_array[bit_array_len++] = bit_codes[byte];
+        }
+    }
+
+    result_length = (((result_length + 3) / 4)) * 4;
+    result[data_offset_cur] = std::uint8_t((result_length / 2) - 1);
+
+    std::uint32_t word = 0;
+    std::size_t word_len = 32;
+
+    for(std::size_t ii = 0; ii < bit_array_len; ++ii)
+    {
+        const bit_code& bc = bit_array[ii];
+
+        for(std::size_t jj = 0, jl = bc.length; jj < jl; ++jj)
+        {
+            --word_len;
+
+            if((bc.value >> jj) & 1)
+            {
+                word |= (1ull << word_len);
+            }
+
+            if(word_len == 0)
+            {
+                result[result_length++] = std::uint8_t(word >> 0);
+                result[result_length++] = std::uint8_t(word >> 8);
+                result[result_length++] = std::uint8_t(word >> 16);
+                result[result_length++] = std::uint8_t(word >> 24);
+                word = 0;
+                word_len = 32;
+            }
+        }
+    }
+
+    if(word_len < 32)
+    {
+        result[result_length++] = std::uint8_t(word >> 0);
+        result[result_length++] = std::uint8_t(word >> 8);
+        result[result_length++] = std::uint8_t(word >> 16);
+        result[result_length++] = std::uint8_t(word >> 24);
+    }
+
+    result.resize(result_length);
+    return result;
+}
+
+}
+
+result_type compress_4(const std::uint8_t* data, std::size_t size)
+{
+    result_type result{};
+    result.header.type = bios_uncomp_header::type::huffman_4;
+    result.header.length = ((size + 3) >> 2) << 2;
+    result.data = detail::compress<4>(data, size);
+    return result;
+}
+
+result_type compress_8(const std::uint8_t* data, std::size_t size)
+{
+    result_type result{};
+    result.header.type = bios_uncomp_header::type::huffman_8;
+    result.header.length = ((size + 3) >> 2) << 2;
+    result.data = detail::compress<8>(data, size);
+    return result;
+}
+
+}
+
+#endif
+
 
 #include "cprs.h"
 
-
-// --------------------------------------------------------------------
-// GLOBALS
-// --------------------------------------------------------------------
-
-
-static u32 *gids, *gprobs, *gtiers;
-static int *gdad, *glson, *grson;
-static BYTE *gtable;
-
-
-// --------------------------------------------------------------------
-// PROTOTYPES
-// --------------------------------------------------------------------
-
-
-static void hufapp(u32 ids[], const u32 probs[], u32 nn, u32 ii);
-static void huff_init_freqs(u32 freqs[], const void *srcv, int srcS, int srcB);
-static void huff_table_fill(int id, int tier);
-
-
-// --------------------------------------------------------------------
-// FUNCTIONS
-// --------------------------------------------------------------------
-
-
-//! Sorts the ids to the frequency table
-static void hufapp(u32 ids[], const u32 probs[], u32 nn, u32 ii)
+uint huffgba_compress(RECORD *dst, const RECORD *src)
 {
-	u32 jj,kk;
+    if(dst==NULL || src==NULL || src->data==NULL)
+        return 0;
 
-	kk=ids[ii];
-	//while(ii < nn/2)
-	while(ii <= nn/2)
-	{
-		//jj= 2*ii+1;
-		jj= 2*ii;
-		if(jj < nn && probs[ids[jj]] > probs[ids[jj+1]])
-			jj++;
-		if(probs[kk] <= probs[ids[jj]])
-			break;
-		ids[ii]= ids[jj];
-		ii=jj;
-	}
-	ids[ii]=kk;
+    int srcS= src->width*src->height;
+
+    if(srcS < 0)
+        return 0;
+
+    gba_huff::result_type huffman_4 = gba_huff::compress_4(src->data, std::size_t(srcS));
+    gba_huff::result_type huffman_8 = gba_huff::compress_8(src->data, std::size_t(srcS));
+    const gba_huff::result_type* best_huffman = huffman_4.data.size() < huffman_8.data.size() ?
+                &huffman_4 : &huffman_8;
+    std::size_t data_size = best_huffman->data.size();
+
+    if(data_size == 0)
+        return 0;
+
+    std::size_t header_size = sizeof(gba_huff::bios_uncomp_header);
+    std::size_t total_size = header_size + data_size;
+    dst->data= (BYTE*)malloc(total_size);
+    memcpy(dst->data, &best_huffman->header, header_size);
+    memcpy(dst->data + header_size, best_huffman->data.data(), data_size);
+
+    dst->width= 1;
+    dst->height= int(total_size);
+
+    return total_size;
 }
-
-//! Gather the frequency table
-static void huff_init_freqs(u32 freqs[], const void *srcv, int srcS, int srcB)
-{
-	int ii, jj, nn=srcS/4, mm=32/srcB;
-	int count= 1<<srcB;
-	u32 mask= count-1;
-	u32 *srcD= (u32*)srcv;
-
-	memset(freqs, 0, count*sizeof(u32));
-	for(ii=0; ii<nn; ii++)
-		for(jj=0; jj<mm; jj++)			// for all the sub-pixels
-			freqs[(srcD[ii]>>(jj*srcB))&mask]++;
-}
-
-
-//! Runs recursively through the tree, filling the table.
-// OK. It's just sickening how easy this turned out to be
-static void huff_table_fill(int id, int tier)
-{
-	// go left
-	if(glson[id])
-	{
-		huff_table_fill(glson[id], tier+1);
-
-		u32 curr = (gtiers[tier+1]-gtiers[tier]-3)/2;
-		curr |= (glson[glson[id]] ? 0 : 0x80);
-		curr |= (grson[grson[id]] ? 0 : 0x40);
-
-		// register branch
-		gtable[gtiers[tier]++]= (BYTE)curr;
-	}
-	else
-		// register leaf
-		gtable[gtiers[tier]++]= id-1;
-
-	// move up and right
-	id= gdad[id];
-	if(id < 0)
-		huff_table_fill(grson[-id], tier);
-}
-
-//! Main Huffman routine
-uint huffgba_compress(RECORD *dst, const RECORD *src, int srcB)
-{
-	if(dst==NULL || src==NULL || src->data==NULL)
-		return 0;
-
-	int ii, jj, kk;
-	int nch= 1<<srcB, nodes= 2*nch-1;
-	int srcS= src->width*src->height;
-
-	// build frequency table and used id list
-	u32 freqs[256], _ids[512], _probs[512];
-	gids= _ids-1;
-
-	gprobs= _probs-1;
-	huff_init_freqs(freqs, src->data, srcS, srcB);
-	memcpy(_probs, freqs, 256*sizeof(u32));
-	memset(&_probs[256], 0, 256*sizeof(u32));
-
-	int nids=0;
-	for(ii=1; ii<=nch; ii++)
-		if(gprobs[ii])
-			gids[++nids]= ii;
-
-	// --- build tree ---
-
-	// first the 'real' nodes
-	for(ii=nids; ii>0; ii--)
-		hufapp(gids, gprobs, nids, ii);
-
-	int _lson[512], _rson[512], _dad[512];
-
-	glson= _lson-1;
-	grson= _rson-1;
-	gdad= _dad-1;
-	memset(_lson, 0, 512*sizeof(int));
-	memset(_rson, 0, 512*sizeof(int));
-	memset(_dad, 0, 512*sizeof(int));
-
-	// now the composite nodes
-	// ids[1] is always the lowest form
-	ii= nch;
-	while(nids)
-	{
-		jj= gids[1];
-		gids[1]= gids[nids--];
-		hufapp(gids, gprobs, nids, 1);
-		gprobs[++ii]= gprobs[gids[1]] + gprobs[jj];
-		glson[ii]=  gids[1];
-		grson[ii]= jj;
-		gdad[gids[1]]= -ii;	// negative indicates left node
-		gdad[jj]= gids[1]= ii;
-		hufapp(gids, gprobs, nids, 1);
-	}
-
-	// ii-1 is root, not ii!!
-	// Otherwise, you get one extra but useless bit in the codes
-	nids=ii-1;
-	gdad[nids]= 0;
-
-	// --- make the codes ---
-	u32 lens[256], codes[256], code;
-
-	// NOTE: gids is now trashed anyway, so keep track of the 
-	// tiers there now
-	int maxlen= 0;
-	gtiers= _ids;
-	memset(gtiers, 0, 256*sizeof(u32));
-
-	for(ii=0; ii<nch; ii++)
-	{
-		if(gprobs[ii+1] == 0)
-			continue;
-
-		kk= gdad[ii+1];
-		code= 0;
-		for(jj=0; kk; jj++)
-		{
-			if(kk>0)
-				code |= 1<<jj;
-			else
-				kk= -kk;
-			kk= gdad[kk];
-		}
-		codes[ii]= code;
-		if(jj>=32)		// codes are too long, FAIL!
-			return 0;
-		lens[ii]= jj;
-
-		// tier tracker:
-		jj++;
-		gtiers[jj]++;
-		if(jj>maxlen)
-			maxlen= jj;
-	}
-
-	// --- create the table --- (ack!)
-
-	// finish up tier positions
-	for(ii=maxlen-1; ii>=0; ii--)
-		gtiers[ii] += gtiers[ii+1]/2;
-
-	for(ii=0; ii<maxlen; ii++)
-		gtiers[ii+1] += gtiers[ii];
-
-	BYTE table[512];
-	gtable= table;
-	memset(table, -1, 512);
-
-	huff_table_fill(nids, 0);
-
-	// --- Encode the source data ---
-
-	int dstS= srcS*2;
-	u32 mask= nch-1;
-
-	BYTE *dstD= (BYTE*)malloc(dstS);
-	if(dstD == NULL)	// whatchoo mean, failed ?!?
-		return 0;
-
-	u32 *srcL4= (u32*)src->data, *dstL4= (u32*)dstD;
-	u32 buf, chunk=0;
-	int nn= srcS/4, mm= 32/srcB, len=32;
-
-	for(ii=0; ii<nn; ii++)
-	{
-		buf= *srcL4++;
-		for(jj=0; jj<mm; jj++)
-		{
-			kk= (buf>>(jj*srcB)) & mask;
-			len -= lens[kk];
-			if(len<0)	// goto new u32
-			{
-				chunk |= codes[kk]>>(-len);
-				*dstL4++= chunk;
-				len += 32;
-				chunk= codes[kk]<<len;
-				dstS += 4;
-			}
-			else		// business as usual
-				chunk |= codes[kk]<<len;
-		}
-	}
-	// don't forget the rest
-	if(len != 32)
-		*dstL4++ = chunk;
-	dstS= (BYTE*)dstL4 - (BYTE*)dstD;
-
-	// --- put everything together ---
-	// full size: header (4) + table size (1) + table (gtiers[maxlen]) + dstS
-
-	len= gtiers[maxlen];
-	dstS= ALIGN4(5+len+dstS);
-
-	free(dst->data);
-	dst->data= (BYTE*)malloc(dstS);
-
-	dst->width= 1;
-	dst->height= dstS;
-
-	*(u32*)dst->data= cprs_create_header(srcS, CPRS_HUFF_TAG | srcB);
-	dst->data[4]= (len-1)/2;
-	memcpy(&dst->data[5], gtable, len);
-	memcpy(&dst->data[5+len], dstD, dstS-len-5);
-
-	free(dstD);
-
-	return dstS;
-}
-
-// EOF
