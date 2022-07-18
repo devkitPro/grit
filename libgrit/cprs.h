@@ -55,9 +55,7 @@ uint fake_decompress(RECORD *dst, const RECORD *src);
 uint lz77gba_compress(RECORD *dst, const RECORD *src);
 uint lz77gba_decompress(RECORD *dst, const RECORD *src);
 
-uint huffgba_compress(RECORD *dst, const RECORD *src, int srcB);
-//uint huf4gba_compress(RECORD *dst, const RECORD *src);
-uint huf8gba_compress(RECORD *dst, const RECORD *src);
+uint huffgba_compress(RECORD *dst, const RECORD *src);
 
 uint rle8gba_compress(RECORD *dst, const RECORD *src);
 uint rle8gba_decompress(RECORD *dst, const RECORD *src);

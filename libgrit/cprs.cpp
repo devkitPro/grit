@@ -51,7 +51,7 @@ bool cprs_compress(RECORD *dst, const RECORD *src, ECprsTag tag)
 
 	//CPRS_HUF4_TAG
 	case CPRS_HUFF8_TAG:
-		bOK= huffgba_compress(dst, src, 8) != 0;	break;
+		bOK= huffgba_compress(dst, src) != 0;	break;
 
 	case CPRS_RLE_TAG:
 		bOK= rle8gba_compress(dst, src) != 0;		break;
