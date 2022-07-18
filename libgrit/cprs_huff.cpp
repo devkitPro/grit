@@ -1,276 +1,694 @@
-//
-//! \file grit_huff.cpp
-//!   Huffman compression implementation, taken from Numerical Recipies.
-//! \date 20050906 - 20080208
-//! \author cearn
-//
-// === NOTES === 
-// * Most tables use BASE 1 INDEXING. because 0 has a special meaning
-//   YHBW.
-// * 8bpp huffman still fails at times ... but why? array overflow?
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
 #include "cprs.h"
 
+#include <algorithm>
+#include <cassert>
+#include <cstdlib>
+#include <cstring>
+#include <deque>
+#include <memory>
+#include <vector>
 
-// --------------------------------------------------------------------
-// GLOBALS
-// --------------------------------------------------------------------
-
-
-static u32 *gids, *gprobs, *gtiers;
-static int *gdad, *glson, *grson;
-static BYTE *gtable;
-
-
-// --------------------------------------------------------------------
-// PROTOTYPES
-// --------------------------------------------------------------------
-
-
-static void hufapp(u32 ids[], const u32 probs[], u32 nn, u32 ii);
-static void huff_init_freqs(u32 freqs[], const void *srcv, int srcS, int srcB);
-static void huff_table_fill(int id, int tier);
-
-
-// --------------------------------------------------------------------
-// FUNCTIONS
-// --------------------------------------------------------------------
-
-
-//! Sorts the ids to the frequency table
-static void hufapp(u32 ids[], const u32 probs[], u32 nn, u32 ii)
+namespace
 {
-	u32 jj,kk;
-
-	kk=ids[ii];
-	//while(ii < nn/2)
-	while(ii <= nn/2)
+/** @brief Huffman node */
+class Node
+{
+public:
+	/** @brief Parameterized constructor
+	 *  @param val   Node value
+	 *  @count count Node count
+	 */
+	Node (uint8_t val, size_t count) : count (count), val (val)
 	{
-		//jj= 2*ii+1;
-		jj= 2*ii;
-		if(jj < nn && probs[ids[jj]] > probs[ids[jj+1]])
-			jj++;
-		if(probs[kk] <= probs[ids[jj]])
-			break;
-		ids[ii]= ids[jj];
-		ii=jj;
 	}
-	ids[ii]=kk;
-}
 
-//! Gather the frequency table
-static void huff_init_freqs(u32 freqs[], const void *srcv, int srcS, int srcB)
-{
-	int ii, jj, nn=srcS/4, mm=32/srcB;
-	int count= 1<<srcB;
-	u32 mask= count-1;
-	u32 *srcD= (u32*)srcv;
-
-	memset(freqs, 0, count*sizeof(u32));
-	for(ii=0; ii<nn; ii++)
-		for(jj=0; jj<mm; jj++)			// for all the sub-pixels
-			freqs[(srcD[ii]>>(jj*srcB))&mask]++;
-}
-
-
-//! Runs recursively through the tree, filling the table.
-// OK. It's just sickening how easy this turned out to be
-static void huff_table_fill(int id, int tier)
-{
-	// go left
-	if(glson[id])
+	/** @brief Parameterized constructor
+	 *  @param left  Left child
+	 *  @count right Right child
+	 */
+	Node (std::unique_ptr<Node> left, std::unique_ptr<Node> right)
+	    : child{std::move (left), std::move (right)}, count (child[0]->count + child[1]->count)
 	{
-		huff_table_fill(glson[id], tier+1);
+		// set children's parent to self
+		child[0]->parent = this;
+		child[1]->parent = this;
+	}
 
-		u32 curr = (gtiers[tier+1]-gtiers[tier]-3)/2;
-		curr |= (glson[glson[id]] ? 0 : 0x80);
-		curr |= (grson[grson[id]] ? 0 : 0x40);
+	Node () = delete;
 
-		// register branch
-		gtable[gtiers[tier]++]= (BYTE)curr;
+	Node (const Node &other) = delete;
+
+	Node (Node &&other) = delete;
+
+	Node &operator= (const Node &other) = delete;
+
+	Node &operator= (Node &&other) = delete;
+
+	/** @brief Comparison operator
+	 *  @param other Object to compare
+	 */
+	bool operator< (const Node &other) const
+	{
+		// major key is count
+		if (count != other.count)
+			return count < other.count;
+
+		// minor key is value
+		return val < other.val;
+	}
+
+	/** @brief Whether this node is a parent */
+	bool isParent () const
+	{
+		return static_cast<bool> (child[0]);
+	}
+
+	/** @brief Build Huffman codes
+	 *  @param[in] node    Huffman node
+	 *  @param[in] code    Huffman code
+	 *  @param[in] codeLen Huffman code length (bits)
+	 */
+	static void buildCodes (std::unique_ptr<Node> &node, uint32_t code, size_t codeLen);
+
+	/** @brief Build lookup table
+	 *  @param[in] nodes Table to fill
+	 *  @param[in] n     Huffman node
+	 */
+	static void buildLookup (std::vector<Node *> &nodes, const std::unique_ptr<Node> &node);
+
+	/** @brief Serialize Huffman tree
+	 *  @param[out] tree Serialized tree
+	 *  @param[in]  node Root of subtree
+	 *  @param[in]  next Next available slot in tree
+	 */
+	static void serializeTree (std::vector<Node *> &tree, Node *node, unsigned next);
+
+	/** @brief Fixup serialized Huffman tree
+	 *  @param[inout] tree Serialized tree
+	 */
+	static void fixupTree (std::vector<Node *> &tree);
+
+	/** @brief Encode Huffman tree
+	 *  @param[out] tree Huffman tree
+	 *  @param[in]  node Huffman node
+	 */
+	static void encodeTree (std::vector<uint8_t> &tree, Node *node);
+
+	/** @brief Count number of nodes in subtree
+	 *  @returns Number of nodes in subtree
+	 */
+	size_t numNodes () const
+	{
+		// sum of children plus self
+		if (isParent ())
+			return child[0]->numNodes () + child[1]->numNodes () + 1;
+
+		// this is a data node, just count self
+		return 1;
+	}
+
+	/** @brief Count number of leaves in subtree
+	 *  @returns Number of leaves in subtree
+	 */
+	size_t numLeaves ()
+	{
+		if (leaves == 0)
+		{
+			if (isParent ())
+			{
+				// sum of children
+				leaves = child[0]->numLeaves () + child[1]->numLeaves ();
+			}
+			else
+			{
+				// this is a data node; it is a leaf
+				leaves = 1;
+			}
+		}
+
+		return leaves;
+	}
+
+	/** @brief Get code */
+	uint32_t getCode () const
+	{
+		assert (!isParent ());
+		return code;
+	}
+
+	/** @brief Get code length */
+	uint8_t getCodeLen () const
+	{
+		assert (!isParent ());
+		return codeLen;
+	}
+
+private:
+	Node *parent;                   ///< Parent node
+	std::unique_ptr<Node> child[2]; ///< Children nodes
+	size_t count    = 0;            ///< Node weight
+	uint32_t code   = 0;            ///< Huffman encoding
+	unsigned leaves = 0;            ///< Number of leaves
+	uint8_t val     = 0;            ///< Huffman tree value
+	uint8_t codeLen = 0;            ///< Huffman code length (bits)
+#ifndef NDEBUG
+	uint16_t pos = 0; ///< Huffman tree position
+#endif
+};
+
+void Node::buildCodes (std::unique_ptr<Node> &node, uint32_t code, size_t codeLen)
+{
+	// don't exceed 32-bit codes
+	assert (codeLen < 32);
+
+	if (node->isParent ())
+	{
+		// build codes for each subtree
+		assert (node->child[0] && node->child[1]);
+		buildCodes (node->child[0], (code << 1) | 0, codeLen + 1);
+		buildCodes (node->child[1], (code << 1) | 1, codeLen + 1);
 	}
 	else
-		// register leaf
-		gtable[gtiers[tier]++]= id-1;
-
-	// move up and right
-	id= gdad[id];
-	if(id < 0)
-		huff_table_fill(grson[-id], tier);
+	{
+		// set code for data node
+		assert (!node->child[0] && !node->child[1]);
+		node->code    = code;
+		node->codeLen = codeLen;
+	}
 }
 
-//! Main Huffman routine
-uint huffgba_compress(RECORD *dst, const RECORD *src, int srcB)
+void Node::buildLookup (std::vector<Node *> &nodes, const std::unique_ptr<Node> &node)
 {
-	if(dst==NULL || src==NULL || src->data==NULL)
-		return 0;
-
-	int ii, jj, kk;
-	int nch= 1<<srcB, nodes= 2*nch-1;
-	int srcS= src->width*src->height;
-
-	// build frequency table and used id list
-	u32 freqs[256], _ids[512], _probs[512];
-	gids= _ids-1;
-
-	gprobs= _probs-1;
-	huff_init_freqs(freqs, src->data, srcS, srcB);
-	memcpy(_probs, freqs, 256*sizeof(u32));
-	memset(&_probs[256], 0, 256*sizeof(u32));
-
-	int nids=0;
-	for(ii=1; ii<=nch; ii++)
-		if(gprobs[ii])
-			gids[++nids]= ii;
-
-	// --- build tree ---
-
-	// first the 'real' nodes
-	for(ii=nids; ii>0; ii--)
-		hufapp(gids, gprobs, nids, ii);
-
-	int _lson[512], _rson[512], _dad[512];
-
-	glson= _lson-1;
-	grson= _rson-1;
-	gdad= _dad-1;
-	memset(_lson, 0, 512*sizeof(int));
-	memset(_rson, 0, 512*sizeof(int));
-	memset(_dad, 0, 512*sizeof(int));
-
-	// now the composite nodes
-	// ids[1] is always the lowest form
-	ii= nch;
-	while(nids)
+	if (!node->isParent ())
 	{
-		jj= gids[1];
-		gids[1]= gids[nids--];
-		hufapp(gids, gprobs, nids, 1);
-		gprobs[++ii]= gprobs[gids[1]] + gprobs[jj];
-		glson[ii]=  gids[1];
-		grson[ii]= jj;
-		gdad[gids[1]]= -ii;	// negative indicates left node
-		gdad[jj]= gids[1]= ii;
-		hufapp(gids, gprobs, nids, 1);
+		// set lookup entry
+		nodes[node->val] = node.get ();
+		return;
 	}
 
-	// ii-1 is root, not ii!!
-	// Otherwise, you get one extra but useless bit in the codes
-	nids=ii-1;
-	gdad[nids]= 0;
+	// build subtree lookups
+	buildLookup (nodes, node->child[0]);
+	buildLookup (nodes, node->child[1]);
+}
 
-	// --- make the codes ---
-	u32 lens[256], codes[256], code;
+void Node::serializeTree (std::vector<Node *> &tree, Node *node, unsigned next)
+{
+	assert (node->isParent ());
 
-	// NOTE: gids is now trashed anyway, so keep track of the 
-	// tiers there now
-	int maxlen= 0;
-	gtiers= _ids;
-	memset(gtiers, 0, 256*sizeof(u32));
-
-	for(ii=0; ii<nch; ii++)
+	if (node->numLeaves () > 0x40)
 	{
-		if(gprobs[ii+1] == 0)
+		// this subtree will overflow the offset field if inserted naively
+		tree[next + 0] = node->child[0].get ();
+		tree[next + 1] = node->child[1].get ();
+
+		unsigned a = 0;
+		unsigned b = 1;
+
+		if (node->child[1]->numLeaves () < node->child[0]->numLeaves ())
+			std::swap (a, b);
+
+		if (node->child[a]->isParent ())
+		{
+			node->child[a]->val = 0;
+			serializeTree (tree, node->child[a].get (), next + 2);
+		}
+
+		if (node->child[b]->isParent ())
+		{
+			node->child[b]->val = node->child[a]->numLeaves () - 1;
+			serializeTree (tree, node->child[b].get (), next + 2 * node->child[a]->numLeaves ());
+		}
+
+		return;
+	}
+
+	std::deque<Node *> queue;
+
+	queue.emplace_back (node->child[0].get ());
+	queue.emplace_back (node->child[1].get ());
+
+	while (!queue.empty ())
+	{
+		node = queue.front ();
+		queue.pop_front ();
+
+		tree[next++] = node;
+
+		if (!node->isParent ())
 			continue;
 
-		kk= gdad[ii+1];
-		code= 0;
-		for(jj=0; kk; jj++)
-		{
-			if(kk>0)
-				code |= 1<<jj;
-			else
-				kk= -kk;
-			kk= gdad[kk];
-		}
-		codes[ii]= code;
-		if(jj>=32)		// codes are too long, FAIL!
-			return 0;
-		lens[ii]= jj;
+		node->val = queue.size () / 2;
 
-		// tier tracker:
-		jj++;
-		gtiers[jj]++;
-		if(jj>maxlen)
-			maxlen= jj;
+		queue.emplace_back (node->child[0].get ());
+		queue.emplace_back (node->child[1].get ());
 	}
-
-	// --- create the table --- (ack!)
-
-	// finish up tier positions
-	for(ii=maxlen-1; ii>=0; ii--)
-		gtiers[ii] += gtiers[ii+1]/2;
-
-	for(ii=0; ii<maxlen; ii++)
-		gtiers[ii+1] += gtiers[ii];
-
-	BYTE table[512];
-	gtable= table;
-	memset(table, -1, 512);
-
-	huff_table_fill(nids, 0);
-
-	// --- Encode the source data ---
-
-	int dstS= srcS*2;
-	u32 mask= nch-1;
-
-	BYTE *dstD= (BYTE*)malloc(dstS);
-	if(dstD == NULL)	// whatchoo mean, failed ?!?
-		return 0;
-
-	u32 *srcL4= (u32*)src->data, *dstL4= (u32*)dstD;
-	u32 buf, chunk=0;
-	int nn= srcS/4, mm= 32/srcB, len=32;
-
-	for(ii=0; ii<nn; ii++)
-	{
-		buf= *srcL4++;
-		for(jj=0; jj<mm; jj++)
-		{
-			kk= (buf>>(jj*srcB)) & mask;
-			len -= lens[kk];
-			if(len<0)	// goto new u32
-			{
-				chunk |= codes[kk]>>(-len);
-				*dstL4++= chunk;
-				len += 32;
-				chunk= codes[kk]<<len;
-				dstS += 4;
-			}
-			else		// business as usual
-				chunk |= codes[kk]<<len;
-		}
-	}
-	// don't forget the rest
-	if(len != 32)
-		*dstL4++ = chunk;
-	dstS= (BYTE*)dstL4 - (BYTE*)dstD;
-
-	// --- put everything together ---
-	// full size: header (4) + table size (1) + table (gtiers[maxlen]) + dstS
-
-	len= gtiers[maxlen];
-	dstS= ALIGN4(5+len+dstS);
-
-	free(dst->data);
-	dst->data= (BYTE*)malloc(dstS);
-
-	dst->width= 1;
-	dst->height= dstS;
-
-	*(u32*)dst->data= cprs_create_header(srcS, CPRS_HUFF_TAG | srcB);
-	dst->data[4]= (len-1)/2;
-	memcpy(&dst->data[5], gtable, len);
-	memcpy(&dst->data[5+len], dstD, dstS-len-5);
-
-	free(dstD);
-
-	return dstS;
 }
 
-// EOF
+void Node::fixupTree (std::vector<Node *> &tree)
+{
+	for (unsigned i = 1; i < tree.size (); ++i)
+	{
+		if (!tree[i]->isParent () || tree[i]->val <= 0x3F)
+			continue;
+
+		unsigned shift = tree[i]->val - 0x3F;
+
+		if ((i & 1) && tree[i - 1]->val == 0x3F)
+		{
+			// right child, and left sibling would overflow if we shifted;
+			// shift the left child by 1 instead
+			--i;
+			shift = 1;
+		}
+
+		unsigned nodeEnd   = i / 2 + 1 + tree[i]->val;
+		unsigned nodeBegin = nodeEnd - shift;
+
+		unsigned shiftBegin = 2 * nodeBegin;
+		unsigned shiftEnd   = 2 * nodeEnd;
+
+		// move last child pair to front
+		auto tmp = std::make_pair (tree[shiftEnd], tree[shiftEnd + 1]);
+		std::memmove (
+		    &tree[shiftBegin + 2], &tree[shiftBegin], sizeof (Node *) * (shiftEnd - shiftBegin));
+		std::tie (tree[shiftBegin], tree[shiftBegin + 1]) = tmp;
+
+		// adjust offsets
+		tree[i]->val -= shift;
+		for (unsigned index = i + 1; index < shiftBegin; ++index)
+		{
+			if (!tree[index]->isParent ())
+				continue;
+
+			unsigned node = index / 2 + 1 + tree[index]->val;
+			if (node >= nodeBegin && node < nodeEnd)
+				++tree[index]->val;
+		}
+
+		if (tree[shiftBegin + 0]->isParent ())
+			tree[shiftBegin + 0]->val += shift;
+		if (tree[shiftBegin + 1]->isParent ())
+			tree[shiftBegin + 1]->val += shift;
+
+		for (unsigned index = shiftBegin + 2; index < shiftEnd + 2; ++index)
+		{
+			if (!tree[index]->isParent ())
+				continue;
+
+			unsigned node = index / 2 + 1 + tree[index]->val;
+			if (node > nodeEnd)
+				--tree[index]->val;
+		}
+	}
+}
+
+void Node::encodeTree (std::vector<uint8_t> &tree, Node *node)
+{
+	std::vector<Node *> nodeTree (tree.size ());
+	nodeTree[1] = node;
+	serializeTree (nodeTree, node, 2);
+	fixupTree (nodeTree);
+
+#ifndef NDEBUG
+	for (unsigned i = 1; i < nodeTree.size (); ++i)
+	{
+		assert (nodeTree[i]);
+		nodeTree[i]->pos = i;
+	}
+
+	for (unsigned i = 1; i < nodeTree.size (); ++i)
+	{
+		node = nodeTree[i];
+		if (!node->isParent ())
+			continue;
+
+		assert (!(node->val & 0x80));
+		assert (!(node->val & 0x40));
+		assert (node->child[0]->pos == (node->pos & ~1) + 2 * node->val + 2);
+	}
+#endif
+
+	for (unsigned i = 1; i < nodeTree.size (); ++i)
+	{
+		node = nodeTree[i];
+
+		tree[i] = node->val;
+
+		if (!node->isParent ())
+			continue;
+
+		if (!node->child[0]->isParent ())
+			tree[i] |= 0x80;
+		if (!node->child[1]->isParent ())
+			tree[i] |= 0x40;
+	}
+}
+
+/** @brief Build Huffman tree
+ *  @param[in] src Source data
+ *  @param[in] len Source data length
+ *  @param[in] fourBit_ Whether to use 4-bit encoding
+ *  @returns Root node
+ */
+std::unique_ptr<Node> buildTree (const uint8_t *src, size_t len, bool fourBit_)
+{
+	// fill in histogram
+	std::vector<size_t> histogram (fourBit_ ? 16 : 256);
+
+	if (fourBit_)
+	{
+		for (size_t i = 0; i < len; ++i)
+		{
+			++histogram[(src[i] >> 0) & 0xF];
+			++histogram[(src[i] >> 4) & 0xF];
+		}
+	}
+	else
+	{
+		for (size_t i = 0; i < len; ++i)
+			++histogram[src[i]];
+	}
+
+	std::vector<std::unique_ptr<Node>> nodes;
+	{
+		uint8_t val = 0;
+		for (const auto &count : histogram)
+		{
+			if (count > 0)
+				nodes.emplace_back (std::make_unique<Node> (val, count));
+
+			++val;
+		}
+	}
+
+	// done with histogram
+	histogram.clear ();
+
+	// combine nodes
+	while (nodes.size () > 1)
+	{
+		// sort nodes by count; we will combine the two smallest nodes
+		std::sort (std::begin (nodes),
+		    std::end (nodes),
+		    [] (const std::unique_ptr<Node> &lhs, const std::unique_ptr<Node> &rhs) -> bool {
+			    return *lhs < *rhs;
+		    });
+
+		// allocate a parent node
+		std::unique_ptr<Node> node =
+		    std::make_unique<Node> (std::move (nodes[0]), std::move (nodes[1]));
+
+		// replace first node with self
+		nodes[0] = std::move (node);
+
+		// replace second node with last node
+		nodes[1] = std::move (nodes.back ());
+		nodes.pop_back ();
+	}
+
+	// root is the last node left
+	std::unique_ptr<Node> root = std::move (nodes[0]);
+
+	// root must have children
+	if (!root->isParent ())
+		root = std::make_unique<Node> (std::move (root), std::make_unique<Node> (0x00, 0));
+
+	// build Huffman codes
+	Node::buildCodes (root, 0, 0);
+
+	// return root node
+	return root;
+}
+
+/** @brief Bitstream */
+class Bitstream
+{
+public:
+	Bitstream (std::vector<uint8_t> &buffer) : buffer (buffer)
+	{
+	}
+
+	/** @brief Flush bitstream block, padded to 32 bits */
+	void flush ()
+	{
+		if (pos >= 32)
+			return;
+
+		// append bitstream block to output buffer
+		buffer.reserve (buffer.size () + 4);
+		buffer.emplace_back (code >> 0);
+		buffer.emplace_back (code >> 8);
+		buffer.emplace_back (code >> 16);
+		buffer.emplace_back (code >> 24);
+
+		// reset bitstream block
+		pos  = 32;
+		code = 0;
+	}
+
+	/** @brief Push Huffman code onto bitstream
+	 *  @param[in] code Huffman code
+	 *  @param[in] len  Huffman code length (bits)
+	 */
+	void push (uint32_t code, size_t len)
+	{
+		for (size_t i = 1; i <= len; ++i)
+		{
+			// get next bit position
+			--pos;
+
+			// set/reset bit
+			if (code & (1U << (len - i)))
+				this->code |= (1U << pos);
+			else
+				this->code &= ~(1U << pos);
+
+			// flush bitstream block
+			if (pos == 0)
+				flush ();
+		}
+	}
+
+private:
+	std::vector<uint8_t> &buffer; ///< Output buffer
+	size_t pos    = 32;           ///< Bit position
+	uint32_t code = 0;            ///< Bitstream block
+};
+
+std::vector<uint8_t> huffEncode (const void *source, size_t len, bool fourBit_)
+{
+	const uint8_t *src = (const uint8_t *)source;
+	size_t count;
+
+	// build Huffman tree
+	std::unique_ptr<Node> root = buildTree (src, len, fourBit_);
+
+	// build lookup table
+	std::vector<Node *> lookup (256);
+	Node::buildLookup (lookup, root);
+
+	// get number of nodes
+	count = root->numNodes ();
+
+	// allocate Huffman encoded tree
+	std::vector<uint8_t> tree ((count + 2) & ~1);
+
+	// first slot encodes tree size
+	tree[0] = count / 2;
+
+	// encode Huffman tree
+	Node::encodeTree (tree, root.get ());
+
+	// create output buffer
+	std::vector<uint8_t> result;
+	result.reserve (len); // hopefully our output will be smaller
+
+	// append compression header
+	result.emplace_back (fourBit_ ? 0x24 : 0x28); // huff type
+	result.emplace_back (len >> 0);
+	result.emplace_back (len >> 8);
+	result.emplace_back (len >> 16);
+
+	if (len >= 0x1000000) // size extension, not compatible with BIOS routines!
+	{
+		result[0] |= 0x80;
+		result.emplace_back (len >> 24);
+		result.emplace_back (0);
+		result.emplace_back (0);
+		result.emplace_back (0);
+	}
+
+	// append Huffman encoded tree
+	result.insert (std::end (result), std::begin (tree), std::end (tree));
+
+	// we're done with the Huffman encoded tree
+	tree.clear ();
+
+	// create bitstream
+	Bitstream bitstream (result);
+
+	// encode each input byte
+	if (fourBit_)
+	{
+		for (size_t i = 0; i < len; ++i)
+		{
+			// lookup the lower nibble's node
+			Node *node = lookup[(src[i] >> 0) & 0xF];
+
+			// add Huffman code to bitstream
+			bitstream.push (node->getCode (), node->getCodeLen ());
+
+			// lookup the upper nibble's node
+			node = lookup[(src[i] >> 4) & 0xF];
+
+			// add Huffman code to bitstream
+			bitstream.push (node->getCode (), node->getCodeLen ());
+		}
+	}
+	else
+	{
+		for (size_t i = 0; i < len; ++i)
+		{
+			// lookup the byte value's node
+			Node *node = lookup[src[i]];
+
+			// add Huffman code to bitstream
+			bitstream.push (node->getCode (), node->getCodeLen ());
+		}
+	}
+
+	// we're done with the Huffman tree and lookup table
+	root.release ();
+	lookup.clear ();
+
+	// flush the bitstream
+	bitstream.flush ();
+
+	// pad the output buffer to 4 bytes
+	if (result.size () & 0x3)
+		result.resize ((result.size () + 3) & ~0x3);
+
+	// return the output data
+	return result;
+}
+
+#ifndef NDEBUG
+void huffDecode (const void *src, void *dst, size_t size, bool fourBit_)
+{
+	const uint8_t *in   = (const uint8_t *)src;
+	uint8_t *out        = (uint8_t *)dst;
+	uint32_t treeSize   = ((*in) + 1) * 2; // size of the huffman header
+	uint32_t word       = 0;               // 32-bits of input bitstream
+	uint32_t mask       = 0;               // which bit we are reading
+	const uint8_t *tree = in;              // huffman tree
+	size_t node;                           // node in the huffman tree
+	size_t child;                          // child of a node
+	uint32_t offset;                       // offset from node to child
+
+	// point to the root of the huffman tree
+	node = 1;
+
+	// move input pointer to beginning of bitstream
+	in += treeSize;
+
+	uint8_t byte = 0;
+	bool nibble = 0;
+
+	auto pushData = [&]
+	{
+		// copy the child node into the output buffer
+		if (fourBit_)
+		{
+			if (nibble)
+			{
+				*out++ = byte | (tree[child] << 4);
+				--size;
+			}
+			else
+				byte = tree[child];
+
+			nibble = !nibble;
+		}
+		else
+		{
+			*out++ = tree[child];
+			--size;
+		}
+
+		// start over at the root node
+		node = 1;
+	};
+
+	while (size > 0)
+	{
+		if (mask == 0) // we exhausted 32 bits
+		{
+			// reset the mask
+			mask = 0x80000000;
+
+			// read the next 32 bits
+			word = (in[0] << 0) | (in[1] << 8) | (in[2] << 16) | (in[3] << 24);
+			in += 4;
+		}
+
+		// read the current node's offset value
+		offset = tree[node] & 0x3F;
+
+		child = (node & ~1) + offset * 2 + 2;
+
+		if (word & mask) // we read a 1
+		{
+			// point to the "right" child
+			++child;
+
+			if (tree[node] & 0x40) // "right" child is a data node
+				pushData ();
+			else // traverse to the "right" child
+				node = child;
+		}
+		else // we read a 0
+		{
+			// pointed to the "left" child
+
+			if (tree[node] & 0x80) // "left" child is a data node
+				pushData ();
+			else // traverse to the "left" child
+				node = child;
+		}
+
+		// shift to read next bit (read bit 31 to bit 0)
+		mask >>= 1;
+	}
+}
+#endif
+}
+
+uint huffgba_compress(RECORD *dst, const RECORD *src)
+{
+	if(!dst || !src || !src->data)
+		return 0;
+
+	auto const huff4 = huffEncode (src->data, rec_size (src), true);
+	auto const huff8 = huffEncode (src->data, rec_size (src), false);
+
+	auto const &huff = huff4.size () < huff8.size () ? huff4 : huff8;
+
+	dst->width  = 1;
+	dst->height = huff.size ();
+	dst->data   = (BYTE*)malloc (huff.size ());
+	memcpy (dst->data, huff.data (), huff.size ());
+
+#ifndef NDEBUG
+	std::vector<uint8_t> test (rec_size (src));
+
+	assert (huff[0] == 0x24 || huff[0] == 0x28);
+	huffDecode (&huff[4], test.data (), test.size (), huff[0] == 0x24);
+
+	assert (huff[1] == ((rec_size (src) >> 0) & 0xFF));
+	assert (huff[2] == ((rec_size (src) >> 8) & 0xFF));
+	assert (huff[3] == ((rec_size (src) >> 16) & 0xFF));
+	assert (memcmp (src->data, test.data (), huff.size ()) == 0);
+#endif
+
+	return huff.size ();
+}
