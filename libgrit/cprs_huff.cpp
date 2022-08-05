@@ -561,7 +561,7 @@ std::vector<uint8_t> huffEncode (const void *source, size_t len, bool fourBit_)
 	}
 
 	// we're done with the Huffman tree and lookup table
-	root.release ();
+	root.reset ();
 	lookup.clear ();
 
 	// flush the bitstream
