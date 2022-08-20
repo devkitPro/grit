@@ -690,7 +690,7 @@ uint huffgba_compress(RECORD *dst, const RECORD *src)
 	assert (huff[1] == ((rec_size (src) >> 0) & 0xFF));
 	assert (huff[2] == ((rec_size (src) >> 8) & 0xFF));
 	assert (huff[3] == ((rec_size (src) >> 16) & 0xFF));
-	assert (memcmp (src->data, test.data (), huff.size ()) == 0);
+	assert (memcmp (src->data, test.data (), test.size ()) == 0);
 #endif
 
 	return huff.size ();
