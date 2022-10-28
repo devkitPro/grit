@@ -414,7 +414,6 @@ bool grit_xp_c(GritRec *gr)
 		else
 		{
 			fclose(fout);
-			remove(fpath);
 		}
 	}
 	else
@@ -525,7 +524,6 @@ bool grit_xp_gas(GritRec *gr)
 		else
 		{
 			fclose(fout);
-			remove(fpath);
 		}
 	}
 	else
@@ -1153,7 +1151,6 @@ bool grit_xp_h(GritRec *gr)
 		else
 		{
 			fclose(fout);
-			remove(fpath);
 		}
 	}
 	else
