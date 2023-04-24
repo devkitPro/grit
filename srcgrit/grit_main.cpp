@@ -88,6 +88,7 @@ const char appHelpText[]=
 "-gx            Enable texture operations\n"
 "-gS            Shared graphics\n"
 "-gT{n}         Transparent color; rrggbb hex or 16bit BGR hex [FF00FF]\n"
+"                 -gT! forces alpha bit, only affects NDS\n"
 "-al{n}         Area left [0]\n"
 "-ar{n}         Area right (exclusive) [img width]\n"
 "-aw{n}         Area width [img width]. Overrides -ar\n"
