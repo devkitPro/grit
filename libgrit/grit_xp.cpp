@@ -35,7 +35,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include <unistd.h>
+#ifndef _WIN32
+#   include <unistd.h>
+#endif
 
 #include <cldib_core.h>
 #include "grit.h"
@@ -180,6 +182,16 @@ uint grit_xp_total_size(GritRec *gr);
 static FILE* open_tmp_file(char* pathbuf, size_t pathbuf_sz,
 	const char* base_name)
 {
+#ifdef _WIN32
+    if (tmpnam_s(pathbuf, pathbuf_sz)) {
+        return NULL;
+    }
+
+    FILE* f = fopen(pathbuf, "w+");
+    if (f == NULL) {
+        return NULL;
+    }
+#else
 	snprintf(pathbuf, pathbuf_sz, "%s.tmp.XXXXXX", base_name);
 	int fd = mkstemp(pathbuf);
 	if (fd == -1) {
@@ -191,7 +203,7 @@ static FILE* open_tmp_file(char* pathbuf, size_t pathbuf_sz,
 		close(fd);
 		return NULL;
 	}
-
+#endif
 	return f;
 }
 

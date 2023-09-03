@@ -6,6 +6,7 @@
 #include <cstring>
 #include <deque>
 #include <memory>
+#include <tuple>
 #include <vector>
 
 namespace
