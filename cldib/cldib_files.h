@@ -16,7 +16,7 @@ enum eCldibID
 	CLDIB_TGA
 };
 
-// If you just want to safe without fussing over CXxxFile definitions, 
+// If you just want to load/save without fussing over CXxxFile definitions,
 // use these, where Xxx is the file type, with start-caps 
 // (Bmp, Pcx, Png, etc)
 /*
