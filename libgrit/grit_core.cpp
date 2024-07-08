@@ -232,7 +232,7 @@ void grit_copy_options(GritRec *dst, const GritRec *src)
 	dst->gfxAlphaColor= src->gfxAlphaColor;
 	dst->gfxBpp= src->gfxBpp;
 	dst->gfxOffset= src->gfxOffset;
-	gr->gfxIsOffsetOnZero= src->gfxIsOffsetOnZero;
+	dst->gfxIsOffsetOnZero= src->gfxIsOffsetOnZero;
 	dst->gfxIsShared= src->gfxIsShared;
 
 	// Map options.	
