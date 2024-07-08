@@ -9,7 +9,6 @@
 // * 20060727,jv: data_bitpack() modded for BE systems
 // * 20060725,jv: unmagiced parts of data_true_to_true()
 
-#include <cstdio>
 #include <stdlib.h>
 #include <ctype.h>
 
