@@ -81,8 +81,8 @@ const char appHelpText[]=
 "-g | -g!       Include  or exclude gfx data [inc]\n"
 "-gu(8|16|32)   Gfx data type: u8, u16, u32 [u32]\n"
 "-gz[!lhr0]     Gfx compression: off, lz77, huff, RLE, off+header [off]\n"
-//"-ga{n}         Gfx pixel offset (non-zero pixels) [0]\n"
-//"-gA{n}         Gfx pixel offset n (all pixels) [0]\n"
+"-ga{n}         Gfx pixel offset (non-zero pixels) [0]\n"
+"-gA{n}         Gfx pixel offset n (all pixels) [0]\n"
 "-gb | -gt      Gfx format, bitmap or tile [tile]\n"
 "-gB{fmt}       Gfx format / bit depth (1, 2, 4, 8, 16, a5i3, a3i5) [img bpp]\n"
 "-gx            Enable texture operations\n"
@@ -332,7 +332,11 @@ bool grit_parse_gfx(GritRec *gr, const strvec &args)
 			gr->gfxCompression= val;
 
 		// pixel offset
-		gr->gfxOffset= CLI_INT("-ga", 0);
+		gr->gfxOffset= CLI_INT("-gA", 0);
+        gr->gfxIsOffsetOnZero= (bool)gr->gfxOffset;
+        if (!gr->gfxOffset) {
+            gr->gfxOffset= CLI_INT("-ga", 0);
+        }
 	}
 	else
 		//# PONDER: can img really be excluded from processing?

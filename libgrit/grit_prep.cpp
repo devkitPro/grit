@@ -575,11 +575,14 @@ bool grit_prep_gfx(GritRec *gr)
 	//   problems with padding
 	// NOTE: we're already at 8 or 16 bpp here, with 16 bpp already 
 	//   accounted for. Only have to do 8->1,2,4
-	// TODO: offset
+	// TODO: base eBUP big-endian
 	if(srcB == 8 && srcB != dstB)
 	{
 		lprintf(LOG_STATUS, "  Bitpacking: %d -> %d.\n", srcB, dstB);
-		data_bit_pack(dstD, srcD, srcS, srcB, dstB, 0);
+        DWORD base = gr->gfxOffset;
+        if (gr->gfxIsOffsetOnZero)
+            base |= BUP_BASE0;
+		data_bit_pack(dstD, srcD, srcS, srcB, dstB, base);
 	}
 	else
 		memcpy(dstD, srcD, dstS);
