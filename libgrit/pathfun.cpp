@@ -43,7 +43,7 @@
 
 
 const char cTypeSpec[]= "extern const unsigned";
-const char *cCTypes[]= { "", "char", "short", "", "int" };
+const char *cCTypes[]= { "", "char", "short", "", "long int" };
 const char *cGasTypes[]= { "", ".byte", ".hword", "", ".word" };
 
 
