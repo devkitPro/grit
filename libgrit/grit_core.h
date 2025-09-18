@@ -272,6 +272,7 @@ struct GritRec
 	bool	 gfxHasAlpha;	//!< Input image has transparent color.
 	RGBQUAD	 gfxAlphaColor;	//!< Transparent color (-gT {num} ). 
 	u32		 gfxOffset;		//!< Pixel value offset (-ga {num}).
+	bool	 gfxIsOffsetOnZero;	//!< Pixel value offset for zero pixel as well. (-gA {num}).
 	bool	 gfxIsShared;	//!< Graphics are shared (-gS).
 		
 // Map:

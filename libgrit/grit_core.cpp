@@ -149,6 +149,7 @@ void grit_init(GritRec *gr)
 	gr->gfxAlphaColor= clr2rgb(RGB(255, 0, 255));
 	gr->gfxBpp= 8;
 	gr->gfxOffset= 0;
+	gr->gfxIsOffsetOnZero= false;
 	gr->gfxIsShared= false;
 
 	// Map options.
@@ -231,6 +232,7 @@ void grit_copy_options(GritRec *dst, const GritRec *src)
 	dst->gfxAlphaColor= src->gfxAlphaColor;
 	dst->gfxBpp= src->gfxBpp;
 	dst->gfxOffset= src->gfxOffset;
+	dst->gfxIsOffsetOnZero= src->gfxIsOffsetOnZero;
 	dst->gfxIsShared= src->gfxIsShared;
 
 	// Map options.	

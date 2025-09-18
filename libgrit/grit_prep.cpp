@@ -529,6 +529,7 @@ bool grit_prep_gfx(GritRec *gr)
 {
 	lprintf(LOG_STATUS, "Graphics preparation.\n");		
 
+    int ii;
 	int srcB= dib_get_bpp(gr->_dib);	// should be 8 or 16 by now
 	int srcP= dib_get_pitch(gr->_dib);
 	int srcS= dib_get_size_img(gr->_dib);
@@ -575,14 +576,27 @@ bool grit_prep_gfx(GritRec *gr)
 	//   problems with padding
 	// NOTE: we're already at 8 or 16 bpp here, with 16 bpp already 
 	//   accounted for. Only have to do 8->1,2,4
-	// TODO: offset
+	// TODO: base eBUP big-endian
 	if(srcB == 8 && srcB != dstB)
 	{
 		lprintf(LOG_STATUS, "  Bitpacking: %d -> %d.\n", srcB, dstB);
-		data_bit_pack(dstD, srcD, srcS, srcB, dstB, 0);
+        DWORD base = gr->gfxOffset;
+        if (gr->gfxIsOffsetOnZero)
+            base |= BUP_BASE0;
+		data_bit_pack(dstD, srcD, srcS, srcB, dstB, base);
 	}
-	else
-		memcpy(dstD, srcD, dstS);
+	else {
+        for (ii=0;ii<dstS;ii++) {
+            BYTE bsrcD = srcD[ii];
+            if (bsrcD)
+                dstD[ii] = bsrcD + gr->gfxOffset;
+            else
+                dstD[ii] = 
+                    gr->gfxIsOffsetOnZero
+                    ? bsrcD + gr->gfxOffset
+                    : bsrcD;
+        }
+    }
 
 	//add alpha data for texture formats
 	if((gr->gfxTexMode == GRIT_TEXFMT_A5I3 || gr->gfxTexMode == GRIT_TEXFMT_A3I5))
