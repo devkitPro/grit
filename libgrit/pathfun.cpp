@@ -869,7 +869,7 @@ bool im_data_gas(FILE* fp, const char* name, const void *_data, int *len, int *c
             search[1] = 0;
             if(sscanf(tread, ".%s 0x", search+1))
             {
-                for(i=0; i<5; i<<=1) {
+                for(i=1; i<5; i<<=1) {
                     if(!strcmp(search, cGasTypes[i]))
                     {
                         _chunk = i;
